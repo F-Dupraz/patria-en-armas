@@ -114,7 +114,7 @@
   var KEY = 'patria_en_armas_v1';
 
   function defaults() {
-    return { unlocked: 1, stars: {}, hero: null, sound: true, tutorialDone: false };
+    return { unlocked: 1, stars: {}, hero: null, sound: true, music: true, tutorialDone: false };
   }
 
   TD.Save = {
@@ -130,6 +130,7 @@
         if (o.stars && typeof o.stars === 'object') d.stars = o.stars;
         if (typeof o.hero === 'string') d.hero = o.hero;
         if (typeof o.sound === 'boolean') d.sound = o.sound;
+        if (typeof o.music === 'boolean') d.music = o.music;
         if (typeof o.tutorialDone === 'boolean') d.tutorialDone = o.tutorialDone;
         this.data = d;
       } catch (e) { /* sin almacenamiento: se juega igual, sin guardar */ }

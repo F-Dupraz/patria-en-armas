@@ -73,7 +73,8 @@
 
   Tower.prototype.upgrade = function (b) {
     var g = this.g, cost = this.upgradeCost(b);
-    if (cost == null || g.gold < cost) return false;
+    if (cost == null) return false;
+    if (g.gold < cost) { TD.Audio.play('deny'); return false; }
     if (this.branch < 0) this.branch = b;
     g.gold -= cost;
     this.invested += cost;
@@ -158,7 +159,7 @@
     this.anim += dt;
     if (this.recoil > 0) this.recoil = Math.max(0, this.recoil - dt * 3.2);
     if (this.buffT > 0) this.buffT -= dt;
-    if (this.abCd > 0) this.abCd -= dt;
+    if (this.abCd > 0) { this.abCd -= dt; if (this.abCd <= 0 && this.level >= 3) TD.Audio.play('ready'); }
     if (this.disT > 0) {
       this.disT -= dt;
       if (Math.random() < dt * 5) g.addFx({ k: 'smoke', x: this.x + TD.rand(-12, 12), y: this.y - 26, dur: 0.9, r: 4, grow: 9, color: '#6a6258' });
