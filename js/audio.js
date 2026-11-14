@@ -17,12 +17,15 @@
   var A = {
     ctx: null, on: true, music: true,
     master: null, sfx: null, musBus: null, musFilter: null, noiseBuf: null,
-    last: {}, want: null
+    last: {}, want: null, sfxVol: 1, musVol: 1
   };
   TD.Audio = A;
 
   var MUSIC_VOL = 0.42;        // nivel de la música respecto de los efectos
   var M = { cur: null, timer: null, lvl: 0, downAt: 0, muffled: false };
+
+  // Los volúmenes (0-1) se aplican al cuadrado: el oído percibe mejor ese reparto.
+  function musLevel() { return MUSIC_VOL * A.musVol * A.musVol * (M.muffled ? 0.6 : 1); }
 
   /* ---------- arranque ---------- */
 
@@ -34,10 +37,10 @@
     comp.attack.value = 0.004; comp.release.value = 0.2;
     comp.connect(ctx.destination);
     A.master = ctx.createGain(); A.master.gain.value = 0.32; A.master.connect(comp);
-    A.sfx = ctx.createGain(); A.sfx.connect(A.master);
+    A.sfx = ctx.createGain(); A.sfx.gain.value = A.sfxVol * A.sfxVol; A.sfx.connect(A.master);
     A.musFilter = ctx.createBiquadFilter(); A.musFilter.type = 'lowpass';
     A.musFilter.frequency.value = 20000; A.musFilter.connect(A.master);
-    A.musBus = ctx.createGain(); A.musBus.gain.value = MUSIC_VOL; A.musBus.connect(A.musFilter);
+    A.musBus = ctx.createGain(); A.musBus.gain.value = musLevel(); A.musBus.connect(A.musFilter);
     var len = Math.floor(ctx.sampleRate * 2.0);
     var buf = ctx.createBuffer(1, len, ctx.sampleRate);
     var d = buf.getChannelData(0), i;
@@ -471,7 +474,7 @@
     M.muffled = on;
     var now = A.ctx.currentTime;
     A.musFilter.frequency.setTargetAtTime(on ? 650 : 20000, now, 0.08);
-    A.musBus.gain.setTargetAtTime(on ? MUSIC_VOL * 0.6 : MUSIC_VOL, now, 0.1);
+    A.musBus.gain.setTargetAtTime(musLevel(), now, 0.1);
   };
 
   /* ---------- opciones ---------- */
@@ -489,10 +492,30 @@
     applyTrack();
   };
 
+  // Volumen de efectos y de música (0 a 1). Suenan al instante; se guardan con A.saveVolumes().
+  A.setSfxVol = function (v) {
+    A.sfxVol = Math.max(0, Math.min(1, v));
+    TD.Save.data.sfxVol = A.sfxVol;
+    if (A.ctx) A.sfx.gain.setTargetAtTime(A.sfxVol * A.sfxVol, A.ctx.currentTime, 0.02);
+  };
+  A.setMusicVol = function (v) {
+    A.musVol = Math.max(0, Math.min(1, v));
+    TD.Save.data.musicVol = A.musVol;
+    if (A.ctx) A.musBus.gain.setTargetAtTime(musLevel(), A.ctx.currentTime, 0.03);
+  };
+  A.saveVolumes = function () { TD.Save.save(); };
+
   // Relee las opciones guardadas (al arrancar y al borrar el progreso).
   A.sync = function () {
-    A.on = TD.Save.data.sound;
-    A.music = TD.Save.data.music !== false;
+    var d = TD.Save.data;
+    A.on = d.sound;
+    A.music = d.music !== false;
+    A.sfxVol = typeof d.sfxVol === 'number' ? d.sfxVol : 1;
+    A.musVol = typeof d.musicVol === 'number' ? d.musicVol : 1;
+    if (A.ctx) {
+      A.sfx.gain.value = A.sfxVol * A.sfxVol;
+      A.musBus.gain.value = musLevel();
+    }
     applyTrack();
   };
 })();

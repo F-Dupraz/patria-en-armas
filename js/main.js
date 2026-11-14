@@ -50,14 +50,16 @@
         ev.preventDefault();
         var p = toVirtual(ev);
         UI.click(p.x, p.y);
+        try { canvas.setPointerCapture(ev.pointerId); } catch (e) { /* ignorado */ }
       });
       canvas.addEventListener('pointermove', function (ev) {
         var p = toVirtual(ev);
         UI.move(p.x, p.y);
       });
       var out = function (ev) { if (ev.pointerType !== 'mouse' || ev.type === 'pointerleave') UI.move(-999, -999); };
-      canvas.addEventListener('pointerup', out);
-      canvas.addEventListener('pointercancel', out);
+      var up = function (ev) { UI.release(); out(ev); };
+      canvas.addEventListener('pointerup', up);
+      canvas.addEventListener('pointercancel', up);
       canvas.addEventListener('pointerleave', out);
     } else {
       canvas.addEventListener('mousedown', function (ev) { var p = toVirtual(ev); UI.click(p.x, p.y); });
@@ -69,7 +71,8 @@
           UI.click(p.x, p.y);
         }
       }, { passive: false });
-      canvas.addEventListener('touchend', function () { UI.move(-999, -999); });
+      canvas.addEventListener('touchend', function () { UI.release(); UI.move(-999, -999); });
+      window.addEventListener('mouseup', function () { UI.release(); });
     }
     canvas.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
 
@@ -81,6 +84,7 @@
       UI.key(k);
     });
 
+    window.addEventListener('blur', function () { UI.release(); });
     window.addEventListener('resize', resize);
     window.addEventListener('orientationchange', resize);
     // Pausa automática si se oculta la pestaña en plena batalla

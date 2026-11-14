@@ -13,7 +13,7 @@
 
   var UI = {
     screen: 'menu', t: 0, zones: [], mx: -999, my: -999,
-    game: null, modal: null, modalT: 0, starSnd: 0,
+    game: null, modal: null, modalT: 0, starSnd: 0, settings: false, drag: null,
     mapSel: 0, encyTab: 0, encySel: 0, confirmReset: 0,
     tut: null, heroBack: 'menu'
   };
@@ -56,7 +56,7 @@
 
   /* ---------------- navegación ---------------- */
   UI.go = function (screen) {
-    UI.screen = screen; UI.modal = null; UI.confirmReset = 0;
+    UI.screen = screen; UI.modal = null; UI.confirmReset = 0; UI.settings = false;
     if (screen !== 'game') UI.game = null;
   };
 
@@ -176,8 +176,7 @@
       if (TD.Save.data.hero) UI.go('map'); else { UI.heroBack = 'menu'; UI.go('hero'); }
     }, { primary: true, size: 24 });
     UI.button(ctx, bx, by + 66, 300, 46, 'Enciclopedia', function () { UI.go('ency'); }, { size: 20 });
-    UI.button(ctx, bx, by + 122, 144, 46, 'Sonido: ' + (TD.Audio.on ? 'sí' : 'no'), function () { TD.Audio.setOn(!TD.Audio.on); }, { size: 18 });
-    UI.button(ctx, bx + 156, by + 122, 144, 46, 'Música: ' + (TD.Audio.music ? 'sí' : 'no'), function () { TD.Audio.setMusic(!TD.Audio.music); }, { size: 18 });
+    UI.button(ctx, bx, by + 122, 300, 46, 'Ajustes', function () { UI.settings = true; }, { size: 20 });
     UI.button(ctx, bx, by + 178, 300, 40, UI.confirmReset > 0 ? '¿Seguro? Tocá de nuevo para borrar' : 'Borrar progreso', function () {
       if (UI.confirmReset > 0) { TD.Save.reset(); TD.Audio.sync(); UI.confirmReset = 0; }
       else UI.confirmReset = 4;
@@ -318,6 +317,7 @@
     UI.button(ctx, 40, 34, 110, 38, '← Menú', function () { UI.go('menu'); }, { size: 16 });
     UI.button(ctx, 160, 34, 230, 38, 'Héroe: ' + TD.HEROES[heroKey()].name, function () { UI.heroBack = 'map'; UI.go('hero'); }, { size: 16 });
     UI.button(ctx, 400, 34, 150, 38, 'Enciclopedia', function () { UI.go('ency'); }, { size: 16 });
+    UI.button(ctx, 990, 34, 120, 38, 'Ajustes', function () { UI.settings = true; }, { size: 16 });
     D.star(ctx, 1150, 54, 13, true);
     D.text(ctx, TD.Save.totalStars() + ' / ' + (TD.LEVELS.length * 3), 1170, 61, 20, D.INK, 'left', true);
 
@@ -743,10 +743,54 @@
     D.text(ctx, 'Pausa', W / 2, y + 62, 40, D.INK, 'center', true);
     UI.button(ctx, x + 60, y + 92, w - 120, 50, 'Continuar', UI.togglePause, { primary: true, size: 21 });
     UI.button(ctx, x + 60, y + 154, w - 120, 44, 'Reiniciar batalla', function () { UI.startLevel(g.idx); }, { size: 18 });
-    UI.button(ctx, x + 60, y + 208, 142, 44, 'Sonido: ' + (TD.Audio.on ? 'sí' : 'no'), function () { TD.Audio.setOn(!TD.Audio.on); }, { size: 16 });
-    UI.button(ctx, x + 218, y + 208, 142, 44, 'Música: ' + (TD.Audio.music ? 'sí' : 'no'), function () { TD.Audio.setMusic(!TD.Audio.music); }, { size: 16 });
+    UI.button(ctx, x + 60, y + 208, w - 120, 44, 'Ajustes', function () { UI.settings = true; }, { size: 18 });
     UI.button(ctx, x + 60, y + 262, w - 120, 44, 'Volver al mapa', function () { UI.go('map'); }, { size: 18 });
     D.text(ctx, 'P o Esc para volver al combate', W / 2, y + h - 26, 14, D.INK2, 'center', false, true);
+  }
+
+  /* ---------------- ajustes (panel sobre cualquier pantalla) ---------------- */
+  function applyDrag(mx) {
+    var d = UI.drag;
+    if (!d) return;
+    d.set(Math.round(TD.clamp((mx - d.x) / d.w, 0, 1) * 20) / 20);      // de a 5 %
+  }
+
+  UI.release = function () {
+    var d = UI.drag;
+    UI.drag = null;
+    if (d && d.done) d.done();
+  };
+
+  // Control deslizante: pista, perilla, botones − / + y porcentaje.
+  function slider(ctx, x, cy, w, val, set, done) {
+    var kx = x + w * val, h = 12, bx = x - 56, px = x + w + 16;
+    UI.button(ctx, bx, cy - 20, 44, 40, '−', function () { set(Math.max(0, Math.round(val * 10 - 1) / 10)); done(); }, { size: 24 });
+    UI.button(ctx, px, cy - 20, 44, 40, '+', function () { set(Math.min(1, Math.round(val * 10 + 1) / 10)); done(); }, { size: 22 });
+    D.rr(ctx, x, cy - h / 2, w, h, h / 2); ctx.fillStyle = 'rgba(59,42,26,0.25)'; ctx.fill();
+    if (val > 0) { D.rr(ctx, x, cy - h / 2, Math.max(h, w * val), h, h / 2); ctx.fillStyle = D.CELESTE; ctx.fill(); }
+    D.rr(ctx, x, cy - h / 2, w, h, h / 2); ctx.strokeStyle = D.INK; ctx.lineWidth = 2; ctx.stroke();
+    var hot = UI.drag && UI.drag.x === x || UI.hover(x - 10, cy - 18, w + 20, 36);
+    ctx.beginPath(); ctx.arc(kx, cy, hot ? 15 : 13, 0, TAU);
+    ctx.fillStyle = D.GOLD; ctx.fill(); ctx.strokeStyle = D.INK; ctx.lineWidth = 2.5; ctx.stroke();
+    UI.zone(x - 12, cy - 20, w + 24, 40, function () {
+      UI.drag = { x: x, w: w, set: set, done: done };
+      applyDrag(UI.mx);
+    });
+    D.text(ctx, val <= 0 ? 'Mudo' : Math.round(val * 100) + ' %', x + w + 120, cy + 8, 20, D.INK, 'right', true);
+  }
+
+  function drawSettings(ctx) {
+    var A = TD.Audio, w = 700, h = 430, x = W / 2 - w / 2, y = H / 2 - h / 2, sx = x + 120, sw = 380;
+    dim(ctx, 0.55);
+    D.panel(ctx, x, y, w, h);
+    D.text(ctx, 'Ajustes', W / 2, y + 64, 40, D.INK, 'center', true);
+    D.text(ctx, 'Efectos de sonido', sx, y + 122, 19, D.INK, 'left', true);
+    slider(ctx, sx, y + 158, sw, A.sfxVol, A.setSfxVol, function () { A.saveVolumes(); A.play('upgrade'); });
+    D.text(ctx, 'Música', sx, y + 214, 19, D.INK, 'left', true);
+    slider(ctx, sx, y + 250, sw, A.musVol, A.setMusicVol, function () { A.saveVolumes(); });
+    UI.button(ctx, W / 2 - 216, y + 292, 200, 44, 'Sonido: ' + (A.on ? 'sí' : 'no'), function () { A.setOn(!A.on); }, { size: 17 });
+    UI.button(ctx, W / 2 + 16, y + 292, 200, 44, 'Música: ' + (A.music ? 'sí' : 'no'), function () { A.setMusic(!A.music); }, { size: 17 });
+    UI.button(ctx, W / 2 - 110, y + h - 74, 220, 48, 'Listo', function () { UI.settings = false; }, { primary: true, size: 21 });
   }
 
   function drawLevelUp(ctx, g) {
@@ -835,10 +879,14 @@
       case 'ency': drawEncy(ctx); break;
       case 'game': drawGame(ctx); break;
     }
+    if (UI.settings) drawSettings(ctx);
   };
 
   /* ---------------- entrada ---------------- */
-  UI.move = function (x, y) { UI.mx = x; UI.my = y; };
+  UI.move = function (x, y) {
+    UI.mx = x; UI.my = y;
+    if (UI.drag && x > -900) applyDrag(x);
+  };
 
   UI.click = function (x, y) {
     var i, z;
@@ -860,6 +908,7 @@
   UI.key = function (key) {
     var g = UI.game, k = key.length === 1 ? key.toLowerCase() : key;
     TD.Audio.init();
+    if (UI.settings) { if (k === 'Escape' || k === 'Enter') UI.settings = false; return; }
     if (UI.screen !== 'game' || !g) {
       if (k === 'Escape') {
         if (UI.screen === 'hero') UI.go(UI.heroBack);
