@@ -487,7 +487,7 @@
 
   Hero.prototype.update = function (dt) {
     var g = this.g;
-    if (this.abCd > 0) this.abCd -= dt;
+    if (this.abCd > 0) { this.abCd -= dt; if (this.abCd <= 0 && !this.dead) TD.Audio.play('ready'); }
     if (this.dead) {
       this.reviveT -= dt;
       if (this.reviveT <= 0 && g.gold >= this.reviveCost()) {

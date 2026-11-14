@@ -13,7 +13,7 @@
 
   var UI = {
     screen: 'menu', t: 0, zones: [], mx: -999, my: -999,
-    game: null, modal: null, modalT: 0,
+    game: null, modal: null, modalT: 0, starSnd: 0,
     mapSel: 0, encyTab: 0, encySel: 0, confirmReset: 0,
     tut: null, heroBack: 'menu'
   };
@@ -70,22 +70,36 @@
   UI.togglePause = function () {
     var g = UI.game;
     if (!g || g.state === 'won' || g.state === 'lost') return;
-    if (UI.modal === 'pause') { UI.modal = null; g.paused = false; }
-    else if (!UI.modal) { UI.modal = 'pause'; g.paused = true; }
+    if (UI.modal === 'pause') { UI.modal = null; g.paused = false; TD.Audio.play('resume'); }
+    else if (!UI.modal) { UI.modal = 'pause'; g.paused = true; TD.Audio.play('pause'); }
   };
 
   /* ---------------- actualización ---------------- */
+  // Qué suena: menú y mapa → tema del menú; batalla → marcha (calma, oleada o jefe); final → silencio.
+  function updateMusic(g) {
+    var A = TD.Audio;
+    if (UI.screen !== 'game' || !g) { A.setTrack('menu'); A.setMuffle(false); return; }
+    var over = g.state === 'won' || g.state === 'lost' || UI.modal === 'end';
+    A.setTrack(over ? null : 'battle');
+    A.setMuffle(UI.modal === 'pause');
+    var lvl = 0;
+    if (g.boss && !g.boss.dead && !g.boss.gone) lvl = 2;
+    else if (g.state === 'running' && (g.enemies.length > 0 || g.spawners.length > 0)) lvl = 1;
+    A.setIntensity(lvl);
+  }
+
   UI.update = function (dt) {
     UI.t += dt; UI.modalT += dt;
     if (UI.confirmReset > 0) UI.confirmReset -= dt;
     var g = UI.game;
+    updateMusic(g);
     if (UI.screen !== 'game' || !g) return;
     g.mx = UI.mx; g.my = UI.my;
     if (!UI.modal) {
       g.update(dt);
       if (g.hero.pendingUps > 0 && g.state === 'running') { UI.modal = 'levelup'; UI.modalT = 0; }
     }
-    if ((g.state === 'won' || g.state === 'lost') && UI.modal !== 'end') { UI.modal = 'end'; UI.modalT = 0; }
+    if ((g.state === 'won' || g.state === 'lost') && UI.modal !== 'end') { UI.modal = 'end'; UI.modalT = 0; UI.starSnd = 0; }
     if (UI.tut && !UI.modal) updateTutorial(dt, g);
   };
 
@@ -162,9 +176,10 @@
       if (TD.Save.data.hero) UI.go('map'); else { UI.heroBack = 'menu'; UI.go('hero'); }
     }, { primary: true, size: 24 });
     UI.button(ctx, bx, by + 66, 300, 46, 'Enciclopedia', function () { UI.go('ency'); }, { size: 20 });
-    UI.button(ctx, bx, by + 122, 300, 46, 'Sonido: ' + (TD.Audio.on ? 'sí' : 'no'), function () { TD.Audio.setOn(!TD.Audio.on); }, { size: 20 });
+    UI.button(ctx, bx, by + 122, 144, 46, 'Sonido: ' + (TD.Audio.on ? 'sí' : 'no'), function () { TD.Audio.setOn(!TD.Audio.on); }, { size: 18 });
+    UI.button(ctx, bx + 156, by + 122, 144, 46, 'Música: ' + (TD.Audio.music ? 'sí' : 'no'), function () { TD.Audio.setMusic(!TD.Audio.music); }, { size: 18 });
     UI.button(ctx, bx, by + 178, 300, 40, UI.confirmReset > 0 ? '¿Seguro? Tocá de nuevo para borrar' : 'Borrar progreso', function () {
-      if (UI.confirmReset > 0) { TD.Save.reset(); TD.Audio.on = true; UI.confirmReset = 0; }
+      if (UI.confirmReset > 0) { TD.Save.reset(); TD.Audio.sync(); UI.confirmReset = 0; }
       else UI.confirmReset = 4;
     }, { size: 15, danger: UI.confirmReset > 0 });
 
@@ -465,6 +480,13 @@
     else { ctx.beginPath(); ctx.moveTo(x + 3, y - 5); ctx.lineTo(x + 11, y + 5); ctx.moveTo(x + 11, y - 5); ctx.lineTo(x + 3, y + 5); ctx.stroke(); }
   }
 
+  function iconNote(ctx, x, y, on) {
+    ctx.fillStyle = D.INK; ctx.strokeStyle = D.INK; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.ellipse(x - 4, y + 6, 4.6, 3.4, -0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x + 0.2, y + 5); ctx.lineTo(x + 0.2, y - 8); ctx.lineTo(x + 7, y - 5); ctx.stroke();
+    if (!on) { ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(x - 10, y + 10); ctx.lineTo(x + 10, y - 10); ctx.stroke(); }
+  }
+
   function towerButton(ctx, g, key, n, x, y, w, h) {
     var def = TD.TOWERS[key], can = g.gold >= def.cost;
     var active = g.armed === key;
@@ -550,6 +572,8 @@
     UI.button(ctx, W - 104, 6, 44, 32, 'x' + g.speed, function () { g.speed = g.speed === 1 ? 2 : 1; TD.Audio.play('click'); }, { size: 17, active: g.speed === 2 });
     UI.button(ctx, W - 156, 6, 44, 32, '', function () { TD.Audio.setOn(!TD.Audio.on); });
     iconSound(ctx, W - 136, 22, TD.Audio.on);
+    UI.button(ctx, W - 208, 6, 44, 32, '', function () { TD.Audio.setMusic(!TD.Audio.music); });
+    iconNote(ctx, W - 186, 22, TD.Audio.music);
 
     // --- barra del jefe ---
     if (g.boss && !g.boss.dead && !g.boss.gone) {
@@ -719,7 +743,8 @@
     D.text(ctx, 'Pausa', W / 2, y + 62, 40, D.INK, 'center', true);
     UI.button(ctx, x + 60, y + 92, w - 120, 50, 'Continuar', UI.togglePause, { primary: true, size: 21 });
     UI.button(ctx, x + 60, y + 154, w - 120, 44, 'Reiniciar batalla', function () { UI.startLevel(g.idx); }, { size: 18 });
-    UI.button(ctx, x + 60, y + 208, w - 120, 44, 'Sonido: ' + (TD.Audio.on ? 'sí' : 'no'), function () { TD.Audio.setOn(!TD.Audio.on); }, { size: 18 });
+    UI.button(ctx, x + 60, y + 208, 142, 44, 'Sonido: ' + (TD.Audio.on ? 'sí' : 'no'), function () { TD.Audio.setOn(!TD.Audio.on); }, { size: 16 });
+    UI.button(ctx, x + 218, y + 208, 142, 44, 'Música: ' + (TD.Audio.music ? 'sí' : 'no'), function () { TD.Audio.setMusic(!TD.Audio.music); }, { size: 16 });
     UI.button(ctx, x + 60, y + 262, w - 120, 44, 'Volver al mapa', function () { UI.go('map'); }, { size: 18 });
     D.text(ctx, 'P o Esc para volver al combate', W / 2, y + h - 26, 14, D.INK2, 'center', false, true);
   }
@@ -757,6 +782,7 @@
         var pop = TD.clamp((UI.modalT - 0.3 - i * 0.35) * 4, 0, 1);
         var sc = i < res.stars ? (pop < 1 ? 0.4 + pop * 0.9 : 1) : 1;
         D.star(ctx, W / 2 - 80 + i * 80, y + 150, 30 * sc, i < res.stars && pop > 0);
+        if (i < res.stars && pop > 0 && UI.starSnd <= i) { UI.starSnd = i + 1; TD.Audio.play('star', i); }
       }
       lvl.stars.forEach(function (o, n) {
         var yy = y + 222 + n * 30, ok = res.met[n];
@@ -868,7 +894,7 @@
 
   UI.init = function () {
     TD.Save.load();
-    TD.Audio.on = TD.Save.data.sound;
+    TD.Audio.sync();
     UI.mapSel = Math.min(TD.LEVELS.length - 1, Math.max(0, TD.Save.data.unlocked - 1));
   };
 })();

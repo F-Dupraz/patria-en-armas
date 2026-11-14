@@ -105,7 +105,7 @@
     if (e.def.boss) {
       this.boss = e;
       this.setBanner('¡' + e.def.name + ' entra en combate!');
-      TD.Audio.play('horn');
+      TD.Audio.play('boss');
     }
     return e;
   };
@@ -195,7 +195,10 @@
     if (this.waveLeft[wi] === 0) {
       var bonus = this.lvl.waves[wi].bonus;
       this.gold += bonus;
-      if (this.state === 'running') this.setBanner('Oleada ' + (wi + 1) + ' superada: +' + bonus + ' de oro');
+      if (this.state === 'running') {
+        this.setBanner('Oleada ' + (wi + 1) + ' superada: +' + bonus + ' de oro');
+        if (wi + 1 < this.lvl.waves.length) TD.Audio.play('waveclear');
+      }
     }
   };
 
@@ -211,6 +214,7 @@
       TD.Audio.play('boom');
     } else {
       this.addFx({ k: 'puff', x: e.x, y: e.y - 4, dur: 0.45, seed: e.anim });
+      TD.Audio.play('die');
     }
     if (e.def.boss) {
       this.setBanner('¡Cayó ' + e.def.name + '!');
@@ -234,7 +238,7 @@
     this.lifeFlash = 0.6;
     if (this.boss === e) this.boss = null;
     if (this.sel && this.sel.enemy === e) this.sel = null;
-    TD.Audio.play('life');
+    TD.Audio.play(this.lives > 0 && this.lives <= 5 ? 'alarm' : 'life');
     this.waveResolved(e.wi);
   };
 
@@ -271,7 +275,7 @@
     this.waveIdx++;
     this.nextTimer = this.waveIdx < this.lvl.waves.length ? dur + wv.pause : 0;
     this.setBanner(this.waveIdx === this.lvl.waves.length ? '¡Última oleada!' : 'Oleada ' + this.waveIdx);
-    TD.Audio.play('wave');
+    TD.Audio.play(this.waveIdx === this.lvl.waves.length ? 'wavefinal' : 'wave');
     return true;
   };
 
@@ -281,6 +285,7 @@
     if (!slot || slot.tower || !def) return false;
     if (this.gold < def.cost) {
       this.addText(slot.x, slot.y - 30, 'Te falta oro', '#ffb0a0', 14);
+      TD.Audio.play('deny');
       return false;
     }
     this.gold -= def.cost;
