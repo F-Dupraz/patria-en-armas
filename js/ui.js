@@ -9,21 +9,36 @@
   'use strict';
   var TD = window.TD, D = TD.Draw;
   var TAU = Math.PI * 2;
-  var W = TD.W, H = TD.H;
+  // W y H son el tamaño de la vista: 1280x720 en PC y tablet; en celular (modo compacto, C)
+  // 480 de alto y un ancho variable. Se actualizan en cada cuadro (ver syncView).
+  var V = TD.View, W = TD.W, H = TD.H, C = false;
+  function syncView() { W = V.w; H = V.h; C = V.compact; }
 
   var UI = {
     screen: 'menu', t: 0, zones: [], mx: -999, my: -999,
     game: null, modal: null, modalT: 0, starSnd: 0, settings: false, drag: null,
     mapSel: 0, encyTab: 0, encySel: 0, confirmReset: 0,
     tut: null, heroBack: 'menu',
-    logTab: 0, logBack: 'menu', logNew: {}
+    logTab: 0, logBack: 'menu', logNew: {},
+    heroSel: -1, logPage: 0, iosHelp: false      // solo para el diseño compacto / instalación
   };
   TD.UI = UI;
 
   /* ---------------- sistema de botones ---------------- */
-  UI.zone = function (x, y, w, h, cb) { UI.zones.push({ x: x, y: y, w: w, h: h, cb: cb || null }); };
+  // Transformación en curso (escala + desplazamiento): permite dibujar un bloque achicado
+  // o el mundo dentro de un recuadro, con sus botones y zonas de clic en el lugar correcto.
+  var TF = { s: 1, x: 0, y: 0 };
+  function push(ctx, s, x, y) { ctx.save(); ctx.translate(x, y); ctx.scale(s, s); TF.s = s; TF.x = x; TF.y = y; }
+  function pop(ctx) { ctx.restore(); TF.s = 1; TF.x = 0; TF.y = 0; }
 
-  UI.hover = function (x, y, w, h) { return UI.mx >= x && UI.mx <= x + w && UI.my >= y && UI.my <= y + h; };
+  UI.zone = function (x, y, w, h, cb) {
+    UI.zones.push({ x: x * TF.s + TF.x, y: y * TF.s + TF.y, w: w * TF.s, h: h * TF.s, cb: cb || null });
+  };
+
+  UI.hover = function (x, y, w, h) {
+    var mx = (UI.mx - TF.x) / TF.s, my = (UI.my - TF.y) / TF.s;
+    return mx >= x && mx <= x + w && my >= y && my <= y + h;
+  };
 
   UI.button = function (ctx, x, y, w, h, label, cb, o) {
     o = o || {};
@@ -46,6 +61,24 @@
     ctx.fillText(s, x, y);
   }
 
+  // Cuántos renglones ocupa s con la fuente ya puesta
+  function countLines(ctx, s, maxW) {
+    var words = String(s).split(' '), line = '', n = 0, i, test;
+    for (i = 0; i < words.length; i++) {
+      test = line ? line + ' ' + words[i] : words[i];
+      if (line && ctx.measureText(test).width > maxW) { n++; line = words[i]; } else line = test;
+    }
+    return n + (line ? 1 : 0);
+  }
+
+  // Texto con saltos de línea que se achica hasta entrar en maxLines renglones
+  function wrapMax(ctx, s, x, y, maxW, lh, size, color, maxLines, align, bold, italic) {
+    var k = 1;
+    D.font(ctx, size, bold, italic);
+    while (size * k > 9.5 && countLines(ctx, s, maxW) > maxLines) { k -= 0.04; D.font(ctx, size * k, bold, italic); }
+    return D.wrap(ctx, s, x, y, maxW, lh * k, size * k, color, align, bold, italic);
+  }
+
   function dim(ctx, a) {
     ctx.fillStyle = 'rgba(30,20,10,' + (a == null ? 0.55 : a) + ')';
     ctx.fillRect(0, 0, W, H);
@@ -63,6 +96,7 @@
   function goNow(screen) {
     TD.Logros.flush();                 // contadores de la batalla que se deja
     UI.screen = screen; UI.modal = null; UI.confirmReset = 0; UI.settings = false;
+    UI.iosHelp = false; UI.heroSel = -1; UI.logPage = 0;
     if (screen !== 'game') UI.game = null;
   }
 
@@ -108,6 +142,23 @@
     UI.zone(x, y, w, h, function () { UI.settings = true; if (UI.screen === 'game') TD.Audio.play('click'); });
   }
 
+  /* ---------------- el mundo dentro de la vista ---------------- */
+  // Diseño compacto de batalla: barra superior (CT), columna derecha con héroe, torres y
+  // oleada (CCOL como mínimo) y franja de información abajo (CINFO). El mundo de 1280x720
+  // se achica para entrar en lo que queda, mostrando al menos lo que dejan ver las barras clásicas.
+  var CT = 44, CCOL = 196, CCOL_MAX = 320, CINFO = 36;
+  var WT = { f: 1, ox: 0, oy: 0, ax: 0, ay: 0, aw: TD.W, ah: TD.H, col: 0 };
+  function worldLayout() {
+    if (!C) { WT.f = 1; WT.ox = 0; WT.oy = 0; WT.ax = 0; WT.ay = 0; WT.aw = W; WT.ah = H; WT.col = 0; return WT; }
+    var vis = TD.BAR_Y - 28 - TD.TOP_H;                 // alto del mundo que queda a la vista en el diseño clásico
+    var ah = H - CT - CINFO, f = Math.min((W - CCOL) / TD.W, ah / vis);
+    var col = TD.clamp(W - Math.ceil(TD.W * f), CCOL, CCOL_MAX), aw = W - col;
+    WT.f = f; WT.col = col; WT.ax = 0; WT.ay = CT; WT.aw = aw; WT.ah = ah;
+    WT.ox = (aw - TD.W * f) / 2;
+    WT.oy = CT + (ah - vis * f) / 2 - TD.TOP_H * f;
+    return WT;
+  }
+
   UI.togglePause = function () {
     var g = UI.game;
     if (!g || g.state === 'won' || g.state === 'lost') return;
@@ -131,13 +182,15 @@
 
   UI.update = function (dt) {
     UI.t += dt; UI.modalT += dt;
+    syncView();
     TD.Juice.updateFade(dt);
     TD.Logros.update(dt);
     if (UI.confirmReset > 0) UI.confirmReset -= dt;
     var g = UI.game;
     updateMusic(g);
     if (UI.screen !== 'game' || !g) return;
-    g.mx = UI.mx; g.my = UI.my;
+    var wt = worldLayout();
+    g.mx = (UI.mx - wt.ox) / wt.f; g.my = (UI.my - wt.oy) / wt.f;
     if (!UI.modal) {
       g.update(dt);
       if (g.hero.pendingUps > 0 && g.state === 'running') { UI.modal = 'levelup'; UI.modalT = 0; }
@@ -153,6 +206,15 @@
     'Si te alcanza el oro, construí otra defensa. Después tocá «Llamar oleada» (o Espacio) para empezar.',
     'Cada enemigo abatido da oro. Tocá una torre para mejorarla: cada una tiene dos ramas distintas.',
     'Podés adelantar la próxima oleada para ganar oro extra. Tocá a tu héroe y después el mapa para moverlo. P o Esc pausan.'
+  ];
+
+  // Mismo recorrido para pantalla táctil chica: sin teclas y con la barra a la derecha
+  var TUT_C = [
+    'Tocá un solar vacío (los círculos de piedra con banderín) para elegir dónde construir.',
+    'Ahora elegí una torre en la barra de la derecha. Los Tiradores son un buen comienzo.',
+    'Si te alcanza el oro, construí otra defensa. Después tocá «Llamar oleada» para empezar.',
+    'Cada enemigo abatido da oro. Tocá una torre para mejorarla: cada una tiene dos ramas distintas.',
+    'Podés adelantar la próxima oleada para ganar oro extra. Tocá a tu héroe y después el mapa para moverlo.'
   ];
 
   function updateTutorial(dt, g) {
@@ -182,16 +244,18 @@
   }
 
   function drawTutorial(ctx, g) {
-    var tu = UI.tut, x = 300, y = 54, w = 680, h = 62;
+    var tu = UI.tut, x = 300, y = 54, w = 680, h = 62, wt = WT;
+    if (C) { w = Math.min(680, wt.aw - 20); x = (wt.aw - w) / 2; y = CT + 6; }
     D.panel(ctx, x, y, w, h, 0.96);
     D.text(ctx, 'Instrucción ' + (tu.step + 1) + ' de ' + TUT.length, x + 16, y + 20, 12, D.INK2, 'left', true);
-    D.wrap(ctx, TUT[tu.step], x + 16, y + 38, w - 70, 17, 14, D.INK, 'left', false);
-    UI.button(ctx, x + w - 44, y + 8, 34, 26, '×', endTutorial, { size: 18 });
-    if (tu.step === 0 && g.slots.length) arrow(ctx, g.slots[0].x, g.slots[0].y - 30);
-    else if (tu.step === 1) arrow(ctx, 232 + 2 * 184 + 89, TD.BAR_Y);
-    else if (tu.step === 2 && g.towers.length >= 2) arrow(ctx, 1126, TD.BAR_Y);
-    else if (tu.step === 2) arrow(ctx, 1126, TD.BAR_Y);
-    else if (tu.step === 3 && g.towers.length) arrow(ctx, g.towers[0].x, g.towers[0].y - 96);
+    wrapMax(ctx, (C ? TUT_C : TUT)[tu.step], x + 16, y + 38, w - (C ? 76 : 70), 17, 14, D.INK, 2);
+    if (C) UI.button(ctx, x + w - 52, y + 8, 44, 40, '×', endTutorial, { size: 22 });
+    else UI.button(ctx, x + w - 44, y + 8, 34, 26, '×', endTutorial, { size: 18 });
+    // las flechas del mapa se ubican pasando por la transformación del mundo
+    if (tu.step === 0 && g.slots.length) arrow(ctx, wt.ox + g.slots[0].x * wt.f, wt.oy + (g.slots[0].y - 30) * wt.f);
+    else if (tu.step === 1) { if (C) arrow(ctx, W - wt.col / 2, CCTX + 2 * 58); else arrow(ctx, 232 + 2 * 184 + 89, TD.BAR_Y); }
+    else if (tu.step === 2) { if (C) arrow(ctx, W - wt.col / 2, H - 74); else arrow(ctx, 1126, TD.BAR_Y); }
+    else if (tu.step === 3 && g.towers.length) arrow(ctx, wt.ox + g.towers[0].x * wt.f, wt.oy + (g.towers[0].y - 96) * wt.f);
   }
 
   /* ================================================================
@@ -223,7 +287,12 @@
     TD.Logros.medal(ctx, bx + 62, by + 132, 0.36, 2, 'granada', true);
     D.text(ctx, 'Condecoraciones', bx + 162, by + 132, 19, D.INK, 'center', true);
     if (lc.fresh) badge(ctx, bx + 296, by + 110, lc.fresh);
-    UI.button(ctx, bx, by + 154, 300, 40, 'Ajustes', function () { UI.settings = true; }, { size: 19 });
+    if (TD.PWA.canInstall()) {
+      UI.button(ctx, bx, by + 154, 146, 40, 'Ajustes', function () { UI.settings = true; }, { size: 19 });
+      UI.button(ctx, bx + 154, by + 154, 146, 40, 'Instalar', TD.PWA.install, { size: 19, primary: true });
+    } else {
+      UI.button(ctx, bx, by + 154, 300, 40, 'Ajustes', function () { UI.settings = true; }, { size: 19 });
+    }
     UI.button(ctx, bx, by + 202, 300, 32, UI.confirmReset > 0 ? '¿Seguro? Tocá de nuevo para borrar' : 'Borrar progreso', function () {
       if (UI.confirmReset > 0) { TD.Save.reset(); TD.Audio.sync(); TD.Logros.init(); UI.confirmReset = 0; }
       else UI.confirmReset = 4;
@@ -379,25 +448,9 @@
     D.text(ctx, 'N', 760, 116, 13, D.INK, 'center', true);
   }
 
-  function drawMap(ctx) {
+  // Ruta y nodos de la campaña (half: mitad del lado de la zona de toque)
+  function drawMapNodes(ctx, half) {
     var i, S = TD.Save.data, t = UI.t;
-    D.parchment(ctx);
-    D.text(ctx, 'Campaña', 640, 66, 34, D.INK, 'center', true);
-    UI.button(ctx, 40, 34, 110, 38, '← Menú', function () { UI.go('menu'); }, { size: 16 });
-    UI.button(ctx, 160, 34, 230, 38, 'Héroe: ' + TD.HEROES[heroKey()].name, function () { UI.heroBack = 'map'; UI.go('hero'); }, { size: 16 });
-    UI.button(ctx, 400, 34, 150, 38, 'Enciclopedia', function () { UI.go('ency'); }, { size: 16 });
-    diffChip(ctx, 724, 34, 208, 38, 'Dificultad: ', 16);
-    var lc = TD.Logros.total();
-    UI.button(ctx, 940, 34, 104, 38, '', function () { UI.openLogros('map'); });
-    TD.Logros.medal(ctx, 960, 59, 0.36, 2, 'granada', true);
-    D.text(ctx, lc.got + ' / ' + lc.total, 978, 59, 16, D.INK, 'left', true);
-    if (lc.fresh) badge(ctx, 1040, 38, lc.fresh);
-    UI.button(ctx, 1052, 34, 94, 38, 'Ajustes', function () { UI.settings = true; }, { size: 16 });
-    D.star(ctx, 1166, 54, 13, true);
-    D.text(ctx, TD.Save.totalStars() + ' / ' + (TD.LEVELS.length * 3), 1184, 61, 20, D.INK, 'left', true);
-
-    drawMapArt(ctx);
-
     // ruta punteada
     ctx.setLineDash([7, 6]); ctx.strokeStyle = 'rgba(59,42,26,0.75)'; ctx.lineWidth = 2.2;
     ctx.beginPath();
@@ -423,8 +476,30 @@
       if (open && S.stars[String(n)] != null) {
         for (k = 0; k < 3; k++) D.star(ctx, x - 11 + k * 11, y + 26, 5, k < st);
       }
-      UI.zone(x - 22, y - 22, 44, 50, function () { UI.mapSel = n; TD.Audio.play('click'); });
+      UI.zone(x - half, y - half, half * 2, half * 2 + 6, function () { UI.mapSel = n; TD.Audio.play('click'); });
     });
+  }
+
+  function drawMap(ctx) {
+    var i, S = TD.Save.data, t = UI.t;
+    D.parchment(ctx);
+    D.text(ctx, 'Campaña', 640, 66, 34, D.INK, 'center', true);
+    UI.button(ctx, 40, 34, 110, 38, '← Menú', function () { UI.go('menu'); }, { size: 16 });
+    UI.button(ctx, 160, 34, 230, 38, 'Héroe: ' + TD.HEROES[heroKey()].name, function () { UI.heroBack = 'map'; UI.go('hero'); }, { size: 16 });
+    UI.button(ctx, 400, 34, 150, 38, 'Enciclopedia', function () { UI.go('ency'); }, { size: 16 });
+    diffChip(ctx, 724, 34, 208, 38, 'Dificultad: ', 16);
+    var lc = TD.Logros.total();
+    UI.button(ctx, 940, 34, 104, 38, '', function () { UI.openLogros('map'); });
+    TD.Logros.medal(ctx, 960, 59, 0.36, 2, 'granada', true);
+    D.text(ctx, lc.got + ' / ' + lc.total, 978, 59, 16, D.INK, 'left', true);
+    if (lc.fresh) badge(ctx, 1040, 38, lc.fresh);
+    UI.button(ctx, 1052, 34, 94, 38, 'Ajustes', function () { UI.settings = true; }, { size: 16 });
+    D.star(ctx, 1166, 54, 13, true);
+    D.text(ctx, TD.Save.totalStars() + ' / ' + (TD.LEVELS.length * 3), 1184, 61, 20, D.INK, 'left', true);
+
+    drawMapArt(ctx);
+
+    drawMapNodes(ctx, 22);
 
     // panel del nivel elegido
     var lvl = TD.LEVELS[UI.mapSel], px = 850, py = 90, pw = 400, ph = 600, k2;
@@ -474,7 +549,7 @@
     D.text(ctx, 'Enciclopedia', 640, 66, 34, D.INK, 'center', true);
     UI.button(ctx, 40, 34, 120, 38, '← Volver', function () { UI.go(TD.Save.data.hero ? 'map' : 'menu'); }, { size: 16 });
     UI.button(ctx, 880, 34, 170, 38, 'Batallas', function () { UI.encyTab = 0; }, { size: 16, active: UI.encyTab === 0 });
-    UI.button(ctx, 1060, 34, 180, 38, 'Guía de combate', function () { UI.encyTab = 1; }, { size: 16, active: UI.encyTab === 1 });
+    UI.button(ctx, 1060, 34, 180, 38, 'Guía de combate', function () { UI.encyTab = 1; }, { size: 16, active: UI.encyTab !== 0 });
 
     if (UI.encyTab === 0) {
       D.panel(ctx, 40, 92, 400, 598);
@@ -535,17 +610,8 @@
       // enemigos
       D.panel(ctx, 620, 92, 620, 598);
       D.text(ctx, 'Enemigos', 930, 126, 20, D.INK, 'center', true);
-      var list = ['casaca', 'realista', 'frances', 'explorador', 'caballeria', 'pesado', 'cazador', 'cirujano', 'espia', 'veterano', 'lancha', 'bergantin', 'vapor'];
-      list.forEach(function (id, n) {
-        var def = TD.ENEMIES[id], col = n % 2, row = (n / 2) | 0, ex = 640 + col * 300, ey = 150 + row * 72;
-        for (k in ENC_FIG) if (Object.prototype.hasOwnProperty.call(ENC_FIG, k)) delete ENC_FIG[k];
-        for (k in def.look) if (Object.prototype.hasOwnProperty.call(def.look, k)) ENC_FIG[k] = def.look[k];
-        ENC_FIG.t = UI.t; ENC_FIG.face = 1; ENC_FIG.walk = false; ENC_FIG.atk = 0;
-        if (def.naval) { ENC_FIG.s = 0.55; ENC_FIG.noWake = true; D.ship(ctx, ex + 34, ey + 44, ENC_FIG); }
-        else { ENC_FIG.s = (ENC_FIG.s || 1) * 1.15; D.unit(ctx, ex + 30, ey + 52, ENC_FIG); }
-        D.text(ctx, def.name, ex + 70, ey + 22, 15, D.INK, 'left', true);
-        D.text(ctx, def.trait + ' · armadura ' + def.armor, ex + 70, ey + 40, 13, D.INK2, 'left');
-        D.text(ctx, 'Vida ' + def.hp + ' · vel. ' + def.spd + ' · oro ' + def.gold, ex + 70, ey + 56, 13, D.INK2, 'left');
+      ENC_LIST.forEach(function (id, n) {
+        encyEnemy(ctx, id, 640 + (n % 2) * 300, 150 + ((n / 2) | 0) * 72, 220);
       });
       D.text(ctx, 'Jefes: uno por batalla, con tres fases (al 66 % y al 33 % de vida).', 930, 672, 13, D.INK2, 'center', false, true);
     }
@@ -624,6 +690,20 @@
     var q = Math.min(1, c.t / 0.3), e = 1 - (1 - q) * (1 - q) * (1 - q);
     var x = inGame ? W - w - 12 + (1 - e) * (w + 24) : W / 2 - w / 2;
     var y = inGame ? (UI.tut ? 124 : 52) : 24 - (1 - e) * (h + 34);
+    var clip = false;
+    if (inGame && C) {
+      if (UI.modal === 'end' && UI.game && UI.game.state === 'won') {
+        // sobre el panel de victoria: en el hueco entre los objetivos y los botones
+        x = W / 2 - w / 2; y = H / 2 + 66 + (1 - e) * 16;
+      } else if (UI.modal || UI.settings) {
+        x = W / 2 - w / 2; y = 4 - (1 - e) * (h + 14);
+      } else {
+        // entra por el borde del mundo, sin tapar la columna de torres
+        x = WT.aw - w - 10 + (1 - e) * (w + 20); y = CT + (UI.tut ? 76 : 8);
+        clip = true;
+        ctx.save(); ctx.beginPath(); ctx.rect(0, CT, WT.aw, H - CT); ctx.clip();
+      }
+    }
     ctx.save();
     ctx.globalAlpha = TD.clamp((L.TOAST - c.t) / 0.4, 0, 1);
     ctx.fillStyle = 'rgba(30,20,10,0.35)'; D.rr(ctx, x + 3, y + 4, w, h, 10); ctx.fill();
@@ -634,6 +714,7 @@
     fit(ctx, a.name, x + 76, y + 46, w - 90, 20, D.PARCH, 'left', true);
     fit(ctx, a.desc, x + 76, y + 63, w - 90, 12.5, 'rgba(234,217,173,0.8)', 'left', false, true);
     ctx.restore();
+    if (clip) ctx.restore();
   }
 
   /* ================================================================
@@ -701,31 +782,29 @@
     D.rr(ctx, x, y, w * Math.min(1, frac), h, 8); ctx.fill();
   }
 
-  function drawHUD(ctx, g) {
-    var i, lvl = g.lvl, t = UI.t, BY = TD.BAR_Y;
+  /* ---------------- piezas del HUD que comparten los dos diseños ---------------- */
+  // Marcadores de entrada: muestran por dónde viene la oleada y sirven para llamarla.
+  // mk agranda el dibujo y half es la mitad del lado de la zona de toque (en px del mundo).
+  function entryMarkers(ctx, g, mk, half) {
+    var i, t = UI.t, next = g.lvl.waves[g.waveIdx], used = {};
+    for (i = 0; i < next.groups.length; i++) used[next.groups[i].path] = true;
+    g.entries.forEach(function (en) {
+      if (!used[en.pi]) return;
+      var r = (17 + Math.sin(t * 5) * 2) * mk, m = mk > 1 ? 28 * mk : 0;      // agrandado, no se sale del mundo
+      var ex = m ? TD.clamp(en.x, m, TD.W - m) : en.x, ey = en.y;
+      ctx.fillStyle = 'rgba(179,20,42,0.92)'; ctx.strokeStyle = D.BLANCO; ctx.lineWidth = 2.5 * mk;
+      ctx.beginPath(); ctx.arc(ex, ey, r, 0, TAU); ctx.fill(); ctx.stroke();
+      D.towerIcon(ctx, 'granaderos', ex, ey, 0.9 * mk);
+      if (g.state === 'running' && g.nextTimer > 0) {
+        ctx.strokeStyle = D.GOLD; ctx.lineWidth = 4 * mk;
+        ctx.beginPath(); ctx.arc(ex, ey, r + 5 * mk, -Math.PI / 2, -Math.PI / 2 + TAU * Math.min(1, g.nextTimer / 30)); ctx.stroke();
+      }
+      UI.zone(ex - half, ey - half, half * 2, half * 2, function () { g.callWave(false); });
+    });
+  }
 
-    // --- marcadores de entrada (llaman la oleada) ---
-    if (g.canCall() && !UI.modal) {
-      var next = lvl.waves[g.waveIdx], used = {};
-      for (i = 0; i < next.groups.length; i++) used[next.groups[i].path] = true;
-      g.entries.forEach(function (en) {
-        if (!used[en.pi]) return;
-        var r = 17 + Math.sin(t * 5) * 2;
-        ctx.fillStyle = 'rgba(179,20,42,0.92)'; ctx.strokeStyle = D.BLANCO; ctx.lineWidth = 2.5;
-        ctx.beginPath(); ctx.arc(en.x, en.y, r, 0, TAU); ctx.fill(); ctx.stroke();
-        D.towerIcon(ctx, 'granaderos', en.x, en.y, 0.9);
-        if (g.state === 'running' && g.nextTimer > 0) {
-          ctx.strokeStyle = D.GOLD; ctx.lineWidth = 4;
-          ctx.beginPath(); ctx.arc(en.x, en.y, r + 5, -Math.PI / 2, -Math.PI / 2 + TAU * Math.min(1, g.nextTimer / 30)); ctx.stroke();
-        }
-        UI.zone(en.x - 24, en.y - 24, 48, 48, function () { g.callWave(false); });
-      });
-    }
-
-    // --- barra superior ---
-    ctx.fillStyle = 'rgba(46,32,18,0.92)'; ctx.fillRect(0, 0, W, TD.TOP_H);
-    ctx.fillStyle = D.GOLD; ctx.fillRect(0, TD.TOP_H - 2, W, 2);
-    UI.zone(0, 0, W, TD.TOP_H, null);
+  // Vidas, oro y oleada: el extremo izquierdo de la barra superior
+  function topStatus(ctx, g) {
     var flash = g.lifeFlash > 0 ? 1 + g.lifeFlash : 1;
     D.heart(ctx, 28, 22, 10 * flash);
     D.text(ctx, String(g.lives), 46, 29, 22, g.lives <= 5 ? '#ff9a8a' : D.PARCH, 'left', true);
@@ -744,7 +823,93 @@
       D.text(ctx, '+' + g.goldPlus, 136 + gw, 27 - (0.9 - g.goldPlusT) * 6, 14, '#ffe9a8', 'left', true);
       ctx.restore();
     }
-    D.text(ctx, 'Oleada ' + g.waveIdx + ' / ' + lvl.waves.length, 230, 29, 19, D.PARCH, 'left', true);
+    D.text(ctx, 'Oleada ' + g.waveIdx + ' / ' + g.lvl.waves.length, 230, 29, 19, D.PARCH, 'left', true);
+  }
+
+  function bossBar(ctx, g, cx, by, bw) {
+    var b = g.boss, bx = cx - bw / 2;
+    ctx.fillStyle = 'rgba(46,32,18,0.88)'; D.rr(ctx, bx, by, bw, 34, 8); ctx.fill();
+    ctx.strokeStyle = D.GOLD; ctx.lineWidth = 1.5; ctx.stroke();
+    fit(ctx, b.def.name + ' — fase ' + b.phase + ' de 3', cx, by + 15, bw - 20, 13, D.PARCH, 'center', true);
+    ctx.fillStyle = '#3a1410'; ctx.fillRect(bx + 14, by + 20, bw - 28, 8);
+    ctx.fillStyle = b.phase === 3 ? '#ff5a3a' : (b.phase === 2 ? '#e0762f' : D.SCARLET);
+    ctx.fillRect(bx + 14, by + 20, (bw - 28) * Math.max(0, b.hp / b.maxHp), 8);
+    ctx.fillStyle = D.PARCH;
+    ctx.fillRect(bx + 14 + (bw - 28) * 0.66 - 1, by + 18, 2, 12);
+    ctx.fillRect(bx + 14 + (bw - 28) * 0.33 - 1, by + 18, 2, 12);
+  }
+
+  function drawBanner(ctx, g, cx, ty, maxW, size) {
+    var bn = g.banner, a = Math.min(1, bn.t * 5, (bn.dur - bn.t) * 3);
+    ctx.save(); ctx.globalAlpha = Math.max(0, a);
+    D.font(ctx, size, true);
+    var tw2 = Math.min(maxW, ctx.measureText(bn.text).width + 70);
+    ty -= (1 - Math.min(1, bn.t * 5)) * 10;          // baja deslizándose
+    ctx.fillStyle = 'rgba(46,32,18,0.85)';
+    ctx.beginPath(); ctx.moveTo(cx - tw2 / 2 - 14, ty + 18); ctx.lineTo(cx - tw2 / 2, ty); ctx.lineTo(cx + tw2 / 2, ty); ctx.lineTo(cx + tw2 / 2 + 14, ty + 18); ctx.lineTo(cx + tw2 / 2, ty + 36); ctx.lineTo(cx - tw2 / 2, ty + 36); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = D.GOLD; ctx.lineWidth = 1.5; ctx.stroke();
+    fit(ctx, bn.text, cx, ty + 25, tw2 - 30, size, D.PARCH, 'center', true);
+    ctx.restore();
+  }
+
+  // Renglón de ayuda según lo que esté seleccionado (en compacto, sin atajos de teclado)
+  function infoText(g) {
+    var sel = g.sel, lvl = g.lvl;
+    if (g.mode === 'rally') return 'Tocá dónde querés que formen los granaderos (dentro del alcance del cuartel).';
+    if (sel && sel.tower) return sel.tower.title() + '  ·  ' + sel.tower.info();
+    if (g.armed) {
+      var ad = TD.TOWERS[g.armed], am = TD.DMG[ad.base.type];
+      return ad.name + ': ' + ad.desc + '  |  ' + TD.DMG_NAMES[ad.base.type] + ' — ligera ×' + am.ligera + ' · media ×' + am.media + ' · pesada ×' + am.pesada + '  →  tocá un solar';
+    }
+    if (sel && sel.slot) return C ? 'Elegí qué construir en este solar con los botones de la derecha.' : 'Elegí qué construir en este solar (botones de abajo o teclas 1 a 4).';
+    if (sel && sel.hero) return g.hero.def.name + ' — nivel ' + g.hero.level + '. Tocá el mapa para moverlo. Habilidad' + (C ? '' : ' [H]') + ': ' + g.hero.def.ability.desc;
+    if (sel && sel.enemy) {
+      var se = sel.enemy;
+      return se.def.name + ' — ' + se.def.trait + ' · armadura ' + se.def.armor + ' · vida ' + Math.max(0, Math.ceil(se.hp)) + '/' + se.maxHp + ' · velocidad ' + Math.round(se.def.spd * g.dm.spd) + ' · oro ' + se.def.gold;
+    }
+    if (g.canCall()) return 'Próxima oleada: ' + TD.waveSummary(lvl.waves[g.waveIdx]);
+    if (g.state === 'running') return 'Última oleada en curso: ¡aguantá la línea!';
+    return '';
+  }
+
+  // Retrato redondo del héroe (r = 32 en el diseño clásico) con su zona de toque
+  function heroPortrait(ctx, g, cx, cy, r) {
+    var h = g.hero, hsel = g.sel && g.sel.hero, k = r / 32, gu = h.key === 'guemes';
+    ctx.fillStyle = hsel ? '#b9d8f2' : D.PARCH2;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill();
+    ctx.strokeStyle = hsel ? '#2f6ea8' : D.GOLD; ctx.lineWidth = 3; ctx.stroke();
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r - 2, 0, TAU); ctx.clip();
+    var ho = heroFig(h.key, UI.t, (gu ? 1.25 : 1.7) * k);
+    if (h.dead) ctx.globalAlpha = 0.35;
+    D.unit(ctx, cx - (gu ? 4 * k : 0), cy + (gu ? 26 : 36) * k, ho);
+    ctx.restore();
+    if (h.dead) D.textO(ctx, h.reviveT > 0 ? String(Math.ceil(h.reviveT)) : 'oro', cx, cy + 8 * k, 22 * k, '#ffd76a');
+    UI.zone(cx - r - 2, cy - r - 2, r * 2 + 6, r * 2 + 4, function () {
+      if (h.dead) return;
+      g.sel = (g.sel && g.sel.hero) ? null : { hero: true };
+      g.armed = null; g.mode = null;
+      TD.Audio.play('click');
+    });
+  }
+
+  function heroXp(h) {
+    if (h.level >= 6) return 1;
+    var prev = h.level > 1 ? TD.HERO_XP[h.level - 2] : 0;
+    return TD.clamp((h.xp - prev) / (TD.HERO_XP[h.level - 1] - prev), 0, 1);
+  }
+
+  function drawHUD(ctx, g) {
+    var lvl = g.lvl, BY = TD.BAR_Y;
+
+    // --- marcadores de entrada (llaman la oleada) ---
+    if (g.canCall() && !UI.modal) entryMarkers(ctx, g, 1, 24);
+
+    // --- barra superior ---
+    ctx.fillStyle = 'rgba(46,32,18,0.92)'; ctx.fillRect(0, 0, W, TD.TOP_H);
+    ctx.fillStyle = D.GOLD; ctx.fillRect(0, TD.TOP_H - 2, W, 2);
+    UI.zone(0, 0, W, TD.TOP_H, null);
+    topStatus(ctx, g);
     fit(ctx, lvl.name + ' · ' + lvl.year, W / 2, 29, 420, 20, D.PARCH, 'center', true, true);
     // botones de sistema
     UI.button(ctx, W - 52, 6, 44, 32, '', UI.togglePause);
@@ -758,50 +923,13 @@
     D.diffIcon(ctx, g.diff, W - 238, 21, 0.54, true);
 
     // --- barra del jefe ---
-    if (g.boss && !g.boss.dead && !g.boss.gone) {
-      var b = g.boss, bw = 440, bx = W / 2 - bw / 2, by = 52;
-      ctx.fillStyle = 'rgba(46,32,18,0.88)'; D.rr(ctx, bx, by, bw, 34, 8); ctx.fill();
-      ctx.strokeStyle = D.GOLD; ctx.lineWidth = 1.5; ctx.stroke();
-      fit(ctx, b.def.name + ' — fase ' + b.phase + ' de 3', W / 2, by + 15, bw - 20, 13, D.PARCH, 'center', true);
-      ctx.fillStyle = '#3a1410'; ctx.fillRect(bx + 14, by + 20, bw - 28, 8);
-      ctx.fillStyle = b.phase === 3 ? '#ff5a3a' : (b.phase === 2 ? '#e0762f' : D.SCARLET);
-      ctx.fillRect(bx + 14, by + 20, (bw - 28) * Math.max(0, b.hp / b.maxHp), 8);
-      ctx.fillStyle = D.PARCH;
-      ctx.fillRect(bx + 14 + (bw - 28) * 0.66 - 1, by + 18, 2, 12);
-      ctx.fillRect(bx + 14 + (bw - 28) * 0.33 - 1, by + 18, 2, 12);
-    }
+    if (g.boss && !g.boss.dead && !g.boss.gone) bossBar(ctx, g, W / 2, 52, 440);
 
     // --- cartel ---
-    if (g.banner && !UI.modal) {
-      var bn = g.banner, a = Math.min(1, bn.t * 5, (bn.dur - bn.t) * 3);
-      ctx.save(); ctx.globalAlpha = Math.max(0, a);
-      D.font(ctx, 22, true);
-      var tw2 = Math.min(900, ctx.measureText(bn.text).width + 70), ty = g.boss ? 98 : 62;
-      if (UI.tut) ty = 124;
-      ty -= (1 - Math.min(1, bn.t * 5)) * 10;          // baja deslizándose
-      ctx.fillStyle = 'rgba(46,32,18,0.85)';
-      ctx.beginPath(); ctx.moveTo(W / 2 - tw2 / 2 - 14, ty + 18); ctx.lineTo(W / 2 - tw2 / 2, ty); ctx.lineTo(W / 2 + tw2 / 2, ty); ctx.lineTo(W / 2 + tw2 / 2 + 14, ty + 18); ctx.lineTo(W / 2 + tw2 / 2, ty + 36); ctx.lineTo(W / 2 - tw2 / 2, ty + 36); ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = D.GOLD; ctx.lineWidth = 1.5; ctx.stroke();
-      fit(ctx, bn.text, W / 2, ty + 25, tw2 - 30, 22, D.PARCH, 'center', true);
-      ctx.restore();
-    }
+    if (g.banner && !UI.modal) drawBanner(ctx, g, W / 2, UI.tut ? 124 : (g.boss ? 98 : 62), 900, 22);
 
     // --- franja de información ---
-    var info = '', sel = g.sel;
-    if (g.mode === 'rally') info = 'Tocá dónde querés que formen los granaderos (dentro del alcance del cuartel).';
-    else if (sel && sel.tower) info = sel.tower.title() + '  ·  ' + sel.tower.info();
-    else if (g.armed) {
-      var ad = TD.TOWERS[g.armed], am = TD.DMG[ad.base.type];
-      info = ad.name + ': ' + ad.desc + '  |  ' + TD.DMG_NAMES[ad.base.type] + ' — ligera ×' + am.ligera + ' · media ×' + am.media + ' · pesada ×' + am.pesada + '  →  tocá un solar';
-    }
-    else if (sel && sel.slot) info = 'Elegí qué construir en este solar (botones de abajo o teclas 1 a 4).';
-    else if (sel && sel.hero) info = g.hero.def.name + ' — nivel ' + g.hero.level + '. Tocá el mapa para moverlo. Habilidad [H]: ' + g.hero.def.ability.desc;
-    else if (sel && sel.enemy) {
-      var se = sel.enemy;
-      info = se.def.name + ' — ' + se.def.trait + ' · armadura ' + se.def.armor + ' · vida ' + Math.max(0, Math.ceil(se.hp)) + '/' + se.maxHp + ' · velocidad ' + Math.round(se.def.spd * g.dm.spd) + ' · oro ' + se.def.gold;
-    }
-    else if (g.canCall()) info = 'Próxima oleada: ' + TD.waveSummary(lvl.waves[g.waveIdx]);
-    else if (g.state === 'running') info = 'Última oleada en curso: ¡aguantá la línea!';
+    var info = infoText(g), sel = g.sel;
     if (info) {
       ctx.fillStyle = 'rgba(46,32,18,0.8)'; ctx.fillRect(0, BY - 28, W, 28);
       fit(ctx, info, 14, BY - 9, W - 28, 14, D.PARCH, 'left', false);
@@ -815,31 +943,13 @@
     UI.zone(0, BY - 28, W, H - BY + 28, null);
 
     // héroe
-    var h = g.hero, hsel = sel && sel.hero;
-    ctx.fillStyle = hsel ? '#b9d8f2' : D.PARCH2;
-    ctx.beginPath(); ctx.arc(46, BY + 40, 32, 0, TAU); ctx.fill();
-    ctx.strokeStyle = hsel ? '#2f6ea8' : D.GOLD; ctx.lineWidth = 3; ctx.stroke();
-    ctx.save();
-    ctx.beginPath(); ctx.arc(46, BY + 40, 30, 0, TAU); ctx.clip();
-    var ho = heroFig(h.key, t, h.key === 'guemes' ? 1.25 : 1.7);
-    if (h.dead) ctx.globalAlpha = 0.35;
-    D.unit(ctx, h.key === 'guemes' ? 42 : 46, BY + (h.key === 'guemes' ? 66 : 76), ho);
-    ctx.restore();
-    if (h.dead) {
-      D.textO(ctx, h.reviveT > 0 ? String(Math.ceil(h.reviveT)) : 'oro', 46, BY + 48, 22, '#ffd76a');
-    }
-    UI.zone(12, BY + 6, 70, 68, function () {
-      if (h.dead) return;
-      g.sel = (g.sel && g.sel.hero) ? null : { hero: true };
-      g.armed = null; g.mode = null;
-      TD.Audio.play('click');
-    });
+    var h = g.hero;
+    heroPortrait(ctx, g, 46, BY + 40, 32);
     fit(ctx, h.def.name + ' · Nv ' + h.level, 88, BY + 20, 126, 14, D.PARCH, 'left', true);
     ctx.fillStyle = '#1e140a'; ctx.fillRect(88, BY + 26, 126, 7);
     ctx.fillStyle = D.CELESTE; ctx.fillRect(88, BY + 26, 126 * (h.dead ? 0 : Math.max(0, h.hp / h.maxHp)), 7);
-    var xpA = h.level >= 6 ? 1 : (h.xp - (h.level > 1 ? TD.HERO_XP[h.level - 2] : 0)) / (TD.HERO_XP[h.level - 1] - (h.level > 1 ? TD.HERO_XP[h.level - 2] : 0));
     ctx.fillStyle = '#1e140a'; ctx.fillRect(88, BY + 35, 126, 4);
-    ctx.fillStyle = D.GOLD; ctx.fillRect(88, BY + 35, 126 * TD.clamp(xpA, 0, 1), 4);
+    ctx.fillStyle = D.GOLD; ctx.fillRect(88, BY + 35, 126 * heroXp(h), 4);
     var hReady = !h.dead && h.abCd <= 0;
     UI.button(ctx, 88, BY + 44, 126, 30, hReady ? h.def.ability.name + ' [H]' : (h.dead ? 'Caído' : Math.ceil(h.abCd) + ' s'), function () { h.useAbility(); }, { size: 12, disabled: !hReady, primary: hReady });
     if (!h.dead && h.abCd > 0) cooldownOverlay(ctx, 88, BY + 44, 126, 30, h.abCd / h.abilityCd());
@@ -856,13 +966,7 @@
           upgradeButton(ctx, g, tw, tw.branch, x, cy, 300, ch, 'Z'); x += 308;
         }
       } else {
-        var ready = tw.abilityReady();
-        var hv = UI.hover(x, cy, 300, ch);
-        D.button(ctx, x, cy, 300, ch, hv && ready, { disabled: !ready, primary: ready });
-        fit(ctx, tw.def.ability.name + '  [Q]', x + 12, cy + 24, 276, 17, ready ? D.INK : '#6b5236', 'left', true);
-        D.wrap(ctx, ready ? tw.def.ability.desc : (tw.disT > 0 ? 'Torre fuera de combate' : 'Lista en ' + Math.ceil(tw.abCd) + ' s'), x + 12, cy + 42, 280, 14, 12, D.INK2, 'left');
-        if (!ready && tw.abCd > 0) cooldownOverlay(ctx, x, cy, 300, ch, tw.abCd / tw.def.ability.cd);
-        UI.zone(x, cy, 300, ch, function () { tw.useAbility(); });
+        abilityButton(ctx, tw, x, cy, 300, ch);
         x += 308;
       }
       if (tw.key === 'granaderos') {
@@ -877,22 +981,154 @@
     }
 
     // llamar oleada
-    var wx = 980, ww = 292;
-    if (g.canCall()) {
-      var hovW = UI.hover(wx, cy, ww, ch);
-      D.button(ctx, wx, cy, ww, ch, hovW, { primary: true });
-      if (g.state === 'prep') {
-        D.text(ctx, '¡Llamar oleada!', wx + ww / 2, cy + 28, 21, D.INK, 'center', true);
-        D.text(ctx, 'Espacio · empieza el combate', wx + ww / 2, cy + 49, 13, D.INK, 'center');
-      } else {
-        D.text(ctx, 'Llamar oleada ' + (g.waveIdx + 1), wx + ww / 2, cy + 27, 19, D.INK, 'center', true);
-        var eb = g.earlyBonus();
-        D.text(ctx, 'llega en ' + Math.max(0, Math.ceil(g.nextTimer)) + ' s' + (eb > 0 ? ' · adelantar: +' + eb + ' de oro' : ''), wx + ww / 2, cy + 49, 13, D.INK, 'center');
-      }
-      UI.zone(wx, cy, ww, ch, function () { g.callWave(false); });
+    waveButton(ctx, g, 980, cy, 292, ch);
+  }
+
+  // Habilidad de la torre con la rama completa
+  function abilityButton(ctx, tw, x, y, w, h) {
+    var ready = tw.abilityReady(), hv = UI.hover(x, y, w, h);
+    D.button(ctx, x, y, w, h, hv && ready, { disabled: !ready, primary: ready });
+    var msg = ready ? tw.def.ability.desc : (tw.disT > 0 ? 'Torre fuera de combate' : 'Lista en ' + Math.ceil(tw.abCd) + ' s');
+    if (C) {
+      fit(ctx, tw.def.ability.name, x + 10, y + 21, w - 20, 15, ready ? D.INK : '#6b5236', 'left', true);
+      wrapMax(ctx, msg, x + 10, y + 38, w - 18, 14, 12, D.INK2, Math.max(1, Math.floor((h - 30) / 14)));
     } else {
-      UI.button(ctx, wx, cy, ww, ch, 'Última oleada en curso', null, { disabled: true, size: 17 });
+      fit(ctx, tw.def.ability.name + '  [Q]', x + 12, y + 24, w - 24, 17, ready ? D.INK : '#6b5236', 'left', true);
+      D.wrap(ctx, msg, x + 12, y + 42, w - 20, 14, 12, D.INK2, 'left');
     }
+    if (!ready && tw.abCd > 0) cooldownOverlay(ctx, x, y, w, h, tw.abCd / tw.def.ability.cd);
+    UI.zone(x, y, w, h, function () { tw.useAbility(); });
+  }
+
+  function waveButton(ctx, g, x, y, w, h) {
+    if (!g.canCall()) {
+      UI.button(ctx, x, y, w, h, C ? 'Última oleada' : 'Última oleada en curso', null, { disabled: true, size: C ? 15 : 17 });
+      return;
+    }
+    var hov = UI.hover(x, y, w, h), mx = x + w / 2, y1 = y + h / 2 - (C ? 3 : 4), y2 = y1 + (C ? 20 : 21);
+    D.button(ctx, x, y, w, h, hov, { primary: true });
+    if (g.state === 'prep') {
+      fit(ctx, '¡Llamar oleada!', mx, y1, w - 12, C ? 18 : 21, D.INK, 'center', true);
+      fit(ctx, C ? 'empieza el combate' : 'Espacio · empieza el combate', mx, y2, w - 12, C ? 12.5 : 13, D.INK, 'center');
+    } else {
+      var eb = g.earlyBonus();
+      fit(ctx, 'Llamar oleada ' + (g.waveIdx + 1), mx, y1, w - 12, C ? 17 : 19, D.INK, 'center', true);
+      fit(ctx, (C ? 'en ' : 'llega en ') + Math.max(0, Math.ceil(g.nextTimer)) + ' s' + (eb > 0 ? (C ? ' · +' + eb + ' de oro' : ' · adelantar: +' + eb + ' de oro') : ''), mx, y2, w - 12, C ? 12.5 : 13, D.INK, 'center');
+    }
+    UI.zone(x, y, w, h, function () { g.callWave(false); });
+  }
+
+  /* ---------------- HUD compacto (celular) ---------------- */
+  var CCTX = CT + 112;       // comienzo de la zona de contexto en la columna
+
+  function towerButtonC(ctx, g, key, x, y, w, h) {
+    var def = TD.TOWERS[key], can = g.gold >= def.cost, hov = UI.hover(x, y, w, h);
+    D.button(ctx, x, y, w, h, hov && can, { disabled: !can, active: g.armed === key });
+    D.towerIcon(ctx, key, x + 25, y + h / 2, 1.35);
+    fit(ctx, TD.towerName(key, g.lvl.act), x + 50, y + 21, w - 58, 14.5, can ? D.INK : '#8b7a5c', 'left', true);
+    D.coin(ctx, x + 57, y + 37, 6.5);
+    D.text(ctx, String(def.cost), x + 68, y + 42, 15, can ? D.INK : '#a0522d', 'left', true);
+    UI.zone(x, y, w, h, function () { UI.pickTower(key); });
+  }
+
+  function upgradeButtonC(ctx, g, tw, b, x, y, w, h) {
+    var br = tw.def.branches[b], cost = tw.upgradeCost(b), can = g.gold >= cost, hov = UI.hover(x, y, w, h);
+    D.button(ctx, x, y, w, h, hov && can, { disabled: !can });
+    fit(ctx, br.name + ' ' + ['I', 'II', 'III'][tw.level], x + 10, y + 20, w - 74, 15, can ? D.INK : '#8b7a5c', 'left', true);
+    D.coin(ctx, x + w - 52, y + 15, 6.5);
+    D.text(ctx, String(cost), x + w - 42, y + 20, 14.5, can ? D.INK : '#a0522d', 'left', true);
+    wrapMax(ctx, br.desc, x + 10, y + 37, w - 18, 14, 12, can ? D.INK2 : '#8b7a5c', Math.max(1, Math.floor((h - 28) / 14)));
+    UI.zone(x, y, w, h, function () {
+      if (!tw.upgrade(b)) { g.addText(tw.x, tw.y - 80, 'Te falta oro', '#ffb0a0', 14); g.goldDeny = 0.4; }
+    });
+  }
+
+  function drawHUDC(ctx, g, wt) {
+    var lvl = g.lvl, sel = g.sel, mid = wt.aw / 2;
+    var x0 = W - wt.col, cx = x0 + 8, iw = wt.col - 16;
+
+    // --- marcadores de entrada, sobre el mundo y agrandados para el dedo ---
+    if (g.canCall() && !UI.modal) {
+      var mk = TD.clamp(0.95 / wt.f, 1, 1.7);
+      push(ctx, wt.f, wt.ox, wt.oy);
+      entryMarkers(ctx, g, mk, 26 * mk);
+      pop(ctx);
+    }
+
+    // --- barra superior ---
+    ctx.fillStyle = 'rgba(46,32,18,0.96)'; ctx.fillRect(0, 0, W, CT);
+    ctx.fillStyle = D.GOLD; ctx.fillRect(0, CT - 2, W, 2);
+    UI.zone(0, 0, W, CT, null);
+    topStatus(ctx, g);
+    var nx = 362, nw = W - 178 - nx;
+    if (nw > 110) fit(ctx, lvl.name + ' · ' + lvl.year, nx + nw / 2, 29, nw, 19, D.PARCH, 'center', true, true);
+    UI.button(ctx, W - 58, 5, 52, 34, '', UI.togglePause);
+    iconPause(ctx, W - 32, 22);
+    UI.button(ctx, W - 114, 5, 52, 34, 'x' + g.speed, function () { g.speed = g.speed === 1 ? 2 : 1; TD.Audio.play('click'); }, { size: 18, active: g.speed === 2 });
+    UI.button(ctx, W - 170, 5, 52, 34, '', function () { if (!UI.modal) UI.togglePause(); UI.settings = true; });
+    D.diffIcon(ctx, g.diff, W - 144, 21, 0.56, true);
+
+    // --- jefe y cartel, centrados sobre el mundo ---
+    var boss = g.boss && !g.boss.dead && !g.boss.gone;
+    if (boss) bossBar(ctx, g, mid, CT + 6, Math.min(420, wt.aw - 24));
+    if (g.banner && !UI.modal) drawBanner(ctx, g, mid, UI.tut ? CT + 74 : (boss ? CT + 46 : CT + 10), wt.aw - 40, 19);
+
+    // --- franja de información (dos renglones como mucho) ---
+    var iy = H - CINFO, info = infoText(g);
+    ctx.fillStyle = '#2e2012'; ctx.fillRect(0, iy, wt.aw, CINFO);
+    ctx.fillStyle = D.GOLD; ctx.fillRect(0, iy, wt.aw, 1.5);
+    UI.zone(0, iy, wt.aw, CINFO, null);
+    if (info) {
+      D.font(ctx, 13, false);
+      var one = countLines(ctx, info, wt.aw - 24) <= 1;
+      wrapMax(ctx, info, 12, iy + (one ? 23 : 15), wt.aw - 24, 15, 13, D.PARCH, 2);
+    }
+
+    // --- columna derecha ---
+    var gr = ctx.createLinearGradient(x0, 0, W, 0);
+    gr.addColorStop(0, '#4a3520'); gr.addColorStop(1, '#2e2012');
+    ctx.fillStyle = gr; ctx.fillRect(x0, CT, wt.col, H - CT);
+    ctx.fillStyle = D.GOLD; ctx.fillRect(x0, CT - 2, 2, H - CT + 2);
+    UI.zone(x0, CT, wt.col, H - CT, null);
+
+    // héroe
+    var h = g.hero, hy = CT + 8, bx = cx + 64, bw = iw - 64;
+    heroPortrait(ctx, g, cx + 28, hy + 28, 27);
+    fit(ctx, h.def.name + ' · Nv ' + h.level, bx, hy + 18, bw, 14.5, D.PARCH, 'left', true);
+    ctx.fillStyle = '#1e140a'; ctx.fillRect(bx, hy + 27, bw, 8);
+    ctx.fillStyle = D.CELESTE; ctx.fillRect(bx, hy + 27, bw * (h.dead ? 0 : Math.max(0, h.hp / h.maxHp)), 8);
+    ctx.fillStyle = '#1e140a'; ctx.fillRect(bx, hy + 38, bw, 5);
+    ctx.fillStyle = D.GOLD; ctx.fillRect(bx, hy + 38, bw * heroXp(h), 5);
+    var hReady = !h.dead && h.abCd <= 0;
+    UI.button(ctx, cx, hy + 62, iw, 36, hReady ? h.def.ability.name : (h.dead ? 'Caído' : Math.ceil(h.abCd) + ' s'), function () { h.useAbility(); }, { size: 14, disabled: !hReady, primary: hReady });
+    if (!h.dead && h.abCd > 0) cooldownOverlay(ctx, cx, hy + 62, iw, 36, h.abCd / h.abilityCd());
+
+    // contexto: torres para construir o acciones de la torre elegida
+    var y = CCTX;
+    if (sel && sel.tower) {
+      var tw = sel.tower;
+      if (tw.level < 3) {
+        if (tw.branch < 0) {
+          upgradeButtonC(ctx, g, tw, 0, cx, y, iw, 74); y += 80;
+          upgradeButtonC(ctx, g, tw, 1, cx, y, iw, 74); y += 80;
+        } else {
+          upgradeButtonC(ctx, g, tw, tw.branch, cx, y, iw, 92); y += 98;
+        }
+      } else {
+        abilityButton(ctx, tw, cx, y, iw, 92); y += 98;
+      }
+      if (tw.key === 'granaderos') {
+        UI.button(ctx, cx, y, iw, 36, 'Punto de reunión', function () { g.mode = g.mode === 'rally' ? null : 'rally'; }, { size: 14, active: g.mode === 'rally' });
+        y += 42;
+      }
+      UI.button(ctx, cx, y, iw - 52, 40, 'Vender +' + tw.sellValue(), function () { g.sell(tw); }, { size: 15, danger: true });
+      UI.button(ctx, cx + iw - 46, y, 46, 40, '×', function () { g.sel = null; g.mode = null; }, { size: 22 });
+    } else {
+      TD.TOWER_KEYS.forEach(function (key, n) { towerButtonC(ctx, g, key, cx, y + n * 58, iw, 52); });
+    }
+
+    // llamar oleada
+    waveButton(ctx, g, cx, H - 74, iw, 66);
   }
 
   /* ---------------- modales de batalla ---------------- */
@@ -929,7 +1165,7 @@
     UI.button(ctx, x + 60, y + 154, w - 120, 44, 'Reiniciar batalla', function () { UI.startLevel(g.idx); }, { size: 18 });
     UI.button(ctx, x + 60, y + 208, w - 120, 44, 'Ajustes', function () { UI.settings = true; }, { size: 18 });
     UI.button(ctx, x + 60, y + 262, w - 120, 44, 'Volver al mapa', function () { UI.go('map'); }, { size: 18 });
-    D.text(ctx, 'P o Esc para volver al combate', W / 2, y + h - 26, 14, D.INK2, 'center', false, true);
+    if (!C) D.text(ctx, 'P o Esc para volver al combate', W / 2, y + h - 26, 14, D.INK2, 'center', false, true);
   }
 
   /* ---------------- ajustes (panel sobre cualquier pantalla) ---------------- */
@@ -976,12 +1212,16 @@
     UI.zone(x, y, w, h, function () { UI.setDiff(key); });
   }
 
+  function fsLabel() { return TD.PWA.isFullscreen() ? 'Salir de pantalla completa' : 'Pantalla completa'; }
+
   function drawSettings(ctx) {
+    if (C) { drawSettingsC(ctx); return; }
     var A = TD.Audio, S = TD.Save, w = 760, h = 650, x = W / 2 - w / 2, y = H / 2 - h / 2, sx = x + 158, sw = 380;
     var g = UI.screen === 'game' ? UI.game : null, live = g && g.state !== 'won' && g.state !== 'lost';
     dim(ctx, 0.55);
     D.panel(ctx, x, y, w, h);
     D.text(ctx, 'Ajustes', W / 2, y + 54, 36, D.INK, 'center', true);
+    if (TD.PWA.canFullscreen()) UI.button(ctx, x + w - 216, y + 24, 192, 36, fsLabel(), TD.PWA.toggleFullscreen, { size: 15 });
 
     D.text(ctx, 'Dificultad', x + 64, y + 94, 19, D.INK, 'left', true);
     fit(ctx, TD.diffText(TD.diffKey()), x + w - 64, y + 94, 440, 14, D.INK2, 'right', false, true);
@@ -1071,9 +1311,25 @@
   function drawGame(ctx) {
     var g = UI.game;
     if (!g) return;
-    g.render(ctx);
-    drawHUD(ctx, g);
-    TD.Juice.drawOverlay(ctx, g);
+    var wt = worldLayout(), J = TD.Juice;
+    if (C) {
+      // el mundo, achicado y recortado a su recuadro; alrededor, la interfaz compacta
+      ctx.fillStyle = '#1c140c'; ctx.fillRect(0, 0, W, H);
+      ctx.save();
+      ctx.beginPath(); ctx.rect(wt.ax, wt.ay, wt.aw, wt.ah); ctx.clip();
+      ctx.translate(wt.ox, wt.oy); ctx.scale(wt.f, wt.f);
+      g.render(ctx);
+      ctx.restore();
+      drawHUDC(ctx, g, wt);
+    } else {
+      g.render(ctx);
+      drawHUD(ctx, g);
+    }
+    // las monedas vuelan (en coordenadas del mundo) hasta el contador de oro de la barra
+    J.HUD_COIN.x = (112 - wt.ox) / wt.f; J.HUD_COIN.y = (22 - wt.oy) / wt.f;
+    push(ctx, wt.f, wt.ox, wt.oy);
+    J.drawOverlay(ctx, g);
+    pop(ctx);
     if (UI.tut && !UI.modal) drawTutorial(ctx, g);
     if (UI.modal) {
       ctx.save();
@@ -1086,18 +1342,372 @@
     }
   }
 
+  /* ================================================================
+   *              PANTALLAS EN DISEÑO COMPACTO (CELULAR)
+   * La vista mide W x 480 (W entre 854 y 1280). Mismo contenido que las
+   * pantallas clásicas, reacomodado para leerse y tocarse con el dedo:
+   * menos cosas a la vez, y fichas o páginas en lugar de columnas largas.
+   * ================================================================ */
+  function drawMenuC(ctx) {
+    var i, t = UI.t, mx = W / 2, lc = TD.Logros.total(), inst = TD.PWA.canInstall();
+    D.parchment(ctx);
+    ctx.fillStyle = 'rgba(116,172,223,0.35)'; ctx.fillRect(16, 64, W - 32, 32); ctx.fillRect(16, 128, W - 32, 32);
+    ctx.fillStyle = 'rgba(246,242,228,0.55)'; ctx.fillRect(16, 96, W - 32, 32);
+    D.sun(ctx, mx, 36, 17, t);
+    D.font(ctx, 54, true);
+    ctx.textAlign = 'center'; ctx.lineJoin = 'round';
+    ctx.lineWidth = 6; ctx.strokeStyle = D.PARCH; ctx.strokeText('PATRIA EN ARMAS', mx, 131);
+    ctx.fillStyle = D.INK; ctx.fillText('PATRIA EN ARMAS', mx, 131);
+    fit(ctx, 'Tower Defense de las Invasiones Inglesas, la Independencia y la Vuelta de Obligado', mx, 181, W - 80, 15, D.INK2, 'center', false, true);
+
+    // desfile (va antes que los botones, para que nunca los tape)
+    ctx.fillStyle = 'rgba(59,42,26,0.18)'; ctx.fillRect(16, 456, W - 32, 3);
+    var n = Math.floor((W + 200) / 150);
+    for (i = 0; i < n; i++) {
+      var o = i % 3 === 2 ? MARCH_G : (i % 2 ? MARCH_B : MARCH_A);
+      o.t = t + i * 0.37;
+      var x = ((t * 46 + i * 150) % (n * 150)) - 100;
+      D.shadow(ctx, x, 456, 14, 4);
+      D.unit(ctx, x, 454, o);
+    }
+    D.flagPole(ctx, 84, 456, 112, 'arg', t, 64, 41, 1);
+    D.flagPole(ctx, W - 84, 456, 112, 'arg', t + 1, 64, 41, -1);
+
+    UI.button(ctx, mx - 150, 194, 300, 52, 'Jugar', function () {
+      if (TD.Save.data.hero) UI.go('map'); else { UI.heroBack = 'menu'; UI.go('hero'); }
+    }, { primary: true, size: 25 });
+    UI.button(ctx, mx - 226, 256, 220, 44, 'Enciclopedia', function () { UI.go('ency'); }, { size: 18 });
+    UI.button(ctx, mx + 6, 256, 220, 44, '', function () { UI.openLogros('menu'); });
+    TD.Logros.medal(ctx, mx + 34, 284, 0.36, 2, 'granada', true);
+    D.text(ctx, 'Condecoraciones', mx + 126, 284, 18, D.INK, 'center', true);
+    if (lc.fresh) badge(ctx, mx + 222, 260, lc.fresh);
+    UI.button(ctx, mx - 226, 308, 220, 44, 'Ajustes', function () { UI.settings = true; }, { size: 18 });
+    var reset = function () {
+      if (UI.confirmReset > 0) { TD.Save.reset(); TD.Audio.sync(); TD.Logros.init(); UI.confirmReset = 0; }
+      else UI.confirmReset = 4;
+    };
+    var rl = UI.confirmReset > 0 ? '¿Seguro? Tocá de nuevo' : 'Borrar progreso';
+    if (inst) {
+      UI.button(ctx, mx + 6, 308, 220, 44, 'Instalar el juego', TD.PWA.install, { size: 18, primary: true });
+      UI.button(ctx, mx - 110, 360, 220, 34, rl, reset, { size: 14, danger: UI.confirmReset > 0 });
+    } else {
+      UI.button(ctx, mx + 6, 308, 220, 44, rl, reset, { size: 15, danger: UI.confirmReset > 0 });
+    }
+
+    D.star(ctx, W - 112, 32, 11, true);
+    D.text(ctx, TD.Save.totalStars() + ' / ' + (TD.LEVELS.length * 3), W - 94, 38, 17, D.INK, 'left', true);
+    TD.Logros.medal(ctx, 46, 40, 0.4, 2, 'granada', true);
+    D.text(ctx, lc.got + ' / ' + lc.total, 62, 38, 17, D.INK, 'left', true);
+  }
+
+  /* ---------------- héroe: lista a la izquierda, ficha a la derecha ---------------- */
+  function drawHeroSelectC(ctx) {
+    var t = UI.t, keys = TD.HERO_KEYS;
+    if (UI.heroSel < 0 || UI.heroSel >= keys.length) UI.heroSel = Math.max(0, keys.indexOf(TD.Save.data.hero));
+    D.parchment(ctx);
+    UI.button(ctx, 12, 8, 112, 38, '← Volver', function () { UI.go(UI.heroBack); }, { size: 15 });
+    D.text(ctx, 'Elegí tu héroe', W / 2, 36, 26, D.INK, 'center', true);
+    fit(ctx, 'Te acompaña en toda la campaña y podés cambiarlo desde el mapa. La selección no representa la realidad: es solo para el juego.', W / 2, 59, W - 60, 12.5, '#8a5a55', 'center', false, true);
+
+    keys.forEach(function (key, n) {
+      var def = TD.HEROES[key], x = 12, y = 70 + n * 134, w = 196, h = 128, on = UI.heroSel === n, gu = key === 'guemes';
+      var hov = UI.hover(x, y, w, h);
+      D.button(ctx, x, y, w, h, hov, { active: on, primary: on });
+      ctx.fillStyle = 'rgba(116,172,223,0.3)';
+      ctx.beginPath(); ctx.arc(x + 54, y + 58, 42, 0, TAU); ctx.fill();
+      ctx.strokeStyle = D.INK2; ctx.lineWidth = 1.5; ctx.stroke();
+      var o = heroFig(key, t, gu ? 1.45 : 1.8);
+      o.atk = on ? (t * 1.2) % 1 : 0;
+      D.shadow(ctx, x + 54, y + 96, 26, 6);
+      D.unit(ctx, x + 54 - (gu ? 5 : 0), y + 95, o);
+      fit(ctx, def.name, x + 104, y + 56, w - 112, 17, D.INK, 'left', true);
+      if (TD.Save.data.hero === key) D.text(ctx, 'Tu héroe', x + 104, y + 76, 12.5, '#2f5f8f', 'left', false, true);
+      UI.zone(x, y, w, h, function () { UI.heroSel = n; });
+    });
+
+    var key = keys[UI.heroSel], def = TD.HEROES[key], cur = TD.Save.data.hero === key;
+    var px = 220, py = 70, pw = W - 232, ph = 396, tx = px + 24, tw = pw - 48, yy;
+    D.panel(ctx, px, py, pw, ph);
+    D.text(ctx, def.name, tx, py + 40, 27, D.INK, 'left', true);
+    D.text(ctx, def.title, tx, py + 60, 14, D.INK2, 'left', false, true);
+    D.text(ctx, 'Vida ' + def.hp + ' · Daño ' + def.dmg + ' (' + TD.DMG_NAMES[def.type] + ') · Vel. ' + def.spd, px + pw - 24, py + 38, 13, D.INK2, 'right');
+    yy = wrapMax(ctx, def.bio, tx, py + 90, tw, 22, 16, D.INK, 3);
+    D.text(ctx, 'Habilidad: ' + def.ability.name, tx, yy + 8, 16, '#2f5f8f', 'left', true);
+    yy = wrapMax(ctx, def.ability.desc, tx, yy + 31, tw, 22, 16, D.INK, 2);
+    ctx.strokeStyle = 'rgba(59,42,26,0.35)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(tx, yy - 6); ctx.lineTo(px + pw - 24, yy - 6); ctx.stroke();
+    D.text(ctx, 'En la historia real', tx, yy + 12, 14, D.INK, 'left', true);
+    def.epochs.forEach(function (ep, i) {
+      var ry = yy + 22 + i * 23;
+      ctx.fillStyle = EPOCH_COL[ep.s]; D.rr(ctx, tx, ry, 34, 18, 5); ctx.fill();
+      ctx.strokeStyle = D.INK2; ctx.lineWidth = 1; D.rr(ctx, tx, ry, 34, 18, 5); ctx.stroke();
+      D.text(ctx, EPOCH_TAG[i], tx + 17, ry + 14, 13, ep.s === 'no' ? '#fff' : D.INK, 'center', true);
+      fit(ctx, ep.t, tx + 42, ry + 14, tw - 42, 13, D.INK, 'left');
+    });
+    UI.button(ctx, px + pw / 2 - 160, py + ph - 54, 320, 42, cur ? 'Seguir con ' + def.name : 'Elegir a ' + def.name, function () {
+      TD.Save.data.hero = key; TD.Save.save();
+      UI.go('map');
+    }, { primary: true, size: 18 });
+  }
+
+  /* ---------------- campaña: mapa achicado + ficha del nivel ---------------- */
+  function drawMapC(ctx) {
+    var S = TD.Save.data, lc = TD.Logros.total(), x = 10, k2;
+    D.parchment(ctx);
+    UI.button(ctx, x, 7, 92, 38, '← Menú', function () { UI.go('menu'); }, { size: 14 }); x += 98;
+    UI.button(ctx, x, 7, 168, 38, 'Héroe: ' + TD.HEROES[heroKey()].name, function () { UI.heroBack = 'map'; UI.go('hero'); }, { size: 14 }); x += 174;
+    UI.button(ctx, x, 7, 118, 38, 'Enciclopedia', function () { UI.go('ency'); }, { size: 14 }); x += 124;
+    diffChip(ctx, x, 7, 146, 38, '', 14); x += 152;
+    UI.button(ctx, x, 7, 94, 38, '', function () { UI.openLogros('map'); });
+    TD.Logros.medal(ctx, x + 19, 32, 0.34, 2, 'granada', true);
+    D.text(ctx, lc.got + ' / ' + lc.total, x + 35, 31, 14, D.INK, 'left', true);
+    if (lc.fresh) badge(ctx, x + 90, 11, lc.fresh);
+    x += 100;
+    UI.button(ctx, x, 7, 86, 38, 'Ajustes', function () { UI.settings = true; }, { size: 14 });
+    D.star(ctx, W - 84, 26, 11, true);
+    D.text(ctx, TD.Save.totalStars() + ' / ' + (TD.LEVELS.length * 3), W - 68, 32, 16, D.INK, 'left', true);
+
+    // el mapa clásico (800x600) entra achicado a la izquierda
+    var sm = Math.min(0.7, (W - 30 - 340) / 800), mw = 800 * sm, mh = 600 * sm, my0 = 52 + (420 - mh) / 2;
+    push(ctx, sm, 10 - 30 * sm, my0 - 90 * sm);
+    drawMapArt(ctx);
+    drawMapNodes(ctx, 32);
+    pop(ctx);
+
+    // ficha del nivel elegido
+    var n = UI.mapSel, lvl = TD.LEVELS[n], open = n < S.unlocked, px = 20 + mw, py = 52, pw = W - px - 10, ph = 420, mx = px + pw / 2, yy;
+    D.panel(ctx, px, py, pw, ph);
+    UI.button(ctx, px + 10, py + 28, 42, 42, '‹', n > 0 ? function () { UI.mapSel = n - 1; } : null, { size: 26, disabled: n <= 0 });
+    UI.button(ctx, px + pw - 52, py + 28, 42, 42, '›', n < TD.LEVELS.length - 1 ? function () { UI.mapSel = n + 1; } : null, { size: 26, disabled: n >= TD.LEVELS.length - 1 });
+    D.text(ctx, TD.ACTS[lvl.act].name, mx, py + 26, 13, ACT_COLORS[lvl.act] === '#74acdf' ? '#2f6ea8' : ACT_COLORS[lvl.act], 'center', true);
+    fit(ctx, (n + 1) + '. ' + lvl.name, mx, py + 56, pw - 120, 22, D.INK, 'center', true);
+    fit(ctx, lvl.year + ' · ' + lvl.place, mx, py + 76, pw - 120, 13, D.INK2, 'center', false, true);
+    for (k2 = 0; k2 < 3; k2++) D.star(ctx, mx - 28 + k2 * 28, py + 102, 11, k2 < (S.stars[String(n)] | 0));
+    ctx.strokeStyle = 'rgba(59,42,26,0.4)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px + 22, py + 124); ctx.lineTo(px + pw - 22, py + 124); ctx.stroke();
+    D.text(ctx, 'Objetivos de estrellas', px + 22, py + 148, 14.5, D.INK, 'left', true);
+    yy = py + 172;
+    lvl.stars.forEach(function (o) {
+      D.star(ctx, px + 30, yy - 5, 7, false);
+      fit(ctx, TD.objectiveText(o), px + 46, yy, pw - 66, 14, D.INK, 'left');
+      yy += 23;
+    });
+    fit(ctx, lvl.waves.length + ' oleadas · ' + lvl.gold + ' de oro inicial · ' + lvl.lives + ' vidas', px + 22, yy + 6, pw - 44, 13, D.INK2, 'left');
+    var md = TD.Save.medal(n);
+    if (md >= 0) {
+      D.diffIcon(ctx, TD.DIFF_KEYS[md], px + 33, yy + 27, 0.36);
+      var sdN = S.starsD[String(n)] ? TD.Save.starsAt(n, md) : -1;
+      fit(ctx, 'Mejor victoria: en ' + TD.DIFFS[TD.DIFF_KEYS[md]].name.toLowerCase() +
+        (sdN >= 0 ? ', con ' + sdN + (sdN === 1 ? ' estrella' : ' estrellas') : ''), px + 50, yy + 32, pw - 72, 13, D.INK2, 'left');
+    }
+    if (open) {
+      UI.button(ctx, px + 20, py + ph - 100, pw - 40, 50, '¡A la batalla!', function () { UI.startLevel(UI.mapSel); }, { primary: true, size: 23 });
+    } else {
+      UI.button(ctx, px + 20, py + ph - 100, pw - 40, 50, 'Bloqueado', null, { disabled: true, size: 20 });
+      fit(ctx, 'Ganá la batalla anterior para desbloquearla.', mx, py + ph - 110, pw - 40, 13, D.INK2, 'center', false, true);
+    }
+    UI.button(ctx, px + 20, py + ph - 42, pw - 40, 32, 'Ver ficha histórica', function () { UI.encyTab = 0; UI.encySel = UI.mapSel; UI.go('ency'); }, { size: 14 });
+  }
+
+  /* ---------------- enciclopedia: tres solapas ---------------- */
+  var ENC_LIST = ['casaca', 'realista', 'frances', 'explorador', 'caballeria', 'pesado', 'cazador', 'cirujano', 'espia', 'veterano', 'lancha', 'bergantin', 'vapor'];
+
+  function encyEnemy(ctx, id, ex, ey, tw) {
+    var def = TD.ENEMIES[id], k;
+    for (k in ENC_FIG) if (Object.prototype.hasOwnProperty.call(ENC_FIG, k)) delete ENC_FIG[k];
+    for (k in def.look) if (Object.prototype.hasOwnProperty.call(def.look, k)) ENC_FIG[k] = def.look[k];
+    ENC_FIG.t = UI.t; ENC_FIG.face = 1; ENC_FIG.walk = false; ENC_FIG.atk = 0;
+    if (def.naval) { ENC_FIG.s = 0.55; ENC_FIG.noWake = true; D.ship(ctx, ex + 34, ey + 44, ENC_FIG); }
+    else { ENC_FIG.s = (ENC_FIG.s || 1) * 1.15; D.unit(ctx, ex + 30, ey + 52, ENC_FIG); }
+    fit(ctx, def.name, ex + 70, ey + 22, tw, 15, D.INK, 'left', true);
+    fit(ctx, def.trait + ' · armadura ' + def.armor, ex + 70, ey + 40, tw, 13, D.INK2, 'left');
+    fit(ctx, 'Vida ' + def.hp + ' · vel. ' + def.spd + ' · oro ' + def.gold, ex + 70, ey + 56, tw, 13, D.INK2, 'left');
+  }
+
+  function drawEncyC(ctx) {
+    var i, k, tab = UI.encyTab, tabs = ['Batallas', 'Daño y torres', 'Enemigos'], tx = W - 10;
+    D.parchment(ctx);
+    UI.button(ctx, 10, 7, 108, 38, '← Volver', function () { UI.go(TD.Save.data.hero ? 'map' : 'menu'); }, { size: 15 });
+    D.text(ctx, 'Enciclopedia', 132, 35, 24, D.INK, 'left', true);
+    for (i = 2; i >= 0; i--) {
+      var bw = i === 1 ? 150 : 116;
+      tx -= bw;
+      (function (n) { UI.button(ctx, tx, 7, bw, 38, tabs[n], function () { UI.encyTab = n; }, { size: 15, active: tab === n }); })(i);
+      tx -= 6;
+    }
+
+    if (tab === 0) {
+      // batallas: lista angosta + ficha
+      D.panel(ctx, 10, 52, 258, 420);
+      var y = 60, lastAct = -1;
+      TD.LEVELS.forEach(function (lvl, n) {
+        if (lvl.act !== lastAct) {
+          lastAct = lvl.act;
+          fit(ctx, TD.ACTS[lvl.act].name, 22, y + 14, 234, 12, D.INK2, 'left', true);
+          y += 19;
+        }
+        UI.button(ctx, 20, y, 238, 26, (n + 1) + '. ' + lvl.name, function () { UI.encySel = n; }, { size: 13, active: UI.encySel === n });
+        y += 29;
+      });
+      var lv = TD.LEVELS[UI.encySel], px = 278, pw = W - 288, mx = px + pw / 2, tw = pw - 64, size = 16, total, yy;
+      D.panel(ctx, px, 52, pw, 420);
+      fit(ctx, TD.ACTS[lv.act].name + ' · ' + TD.ACTS[lv.act].years, mx, 78, pw - 40, 13, D.INK2, 'center', true);
+      fit(ctx, lv.name, mx, 112, pw - 110, 29, D.INK, 'center', true);
+      D.text(ctx, lv.year + ' · ' + lv.place, mx, 134, 14, D.INK2, 'center', false, true);
+      ctx.strokeStyle = 'rgba(59,42,26,0.4)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(px + 30, 146); ctx.lineTo(px + pw - 30, 146); ctx.stroke();
+      // la letra se achica lo necesario para que la ficha entre completa
+      do {
+        D.font(ctx, size, false);
+        total = 0;
+        for (k = 0; k < lv.info.length; k++) total += countLines(ctx, lv.info[k], tw) * size * 1.36 + size * 0.6;
+        if (total <= 286) break;
+        size -= 0.5;
+      } while (size > 11);
+      yy = 156 + size;
+      lv.info.forEach(function (line) {
+        ctx.fillStyle = D.PUNZO; ctx.beginPath(); ctx.arc(px + 26, yy - size * 0.3, 3.5, 0, TAU); ctx.fill();
+        yy = D.wrap(ctx, line, px + 40, yy, tw, size * 1.36, size, D.INK, 'left') + size * 0.6;
+      });
+      D.flagPole(ctx, px + pw - 34, 124, 56, TD.flagFor(lv), UI.t, 36, 23, -1);
+      fit(ctx, 'Datos generales de contexto. El terreno y las tropas del juego son aproximados.', mx, 462, pw - 30, 12, D.INK2, 'center', false, true);
+    } else if (tab === 1) {
+      // tabla de daño contra armadura
+      var cols = TD.ARMORS, rows = ['cont', 'perf', 'fuego'], lw = 300;
+      D.panel(ctx, 10, 52, lw, 420);
+      D.text(ctx, 'Daño contra armadura', 10 + lw / 2, 84, 18, D.INK, 'center', true);
+      D.text(ctx, 'Armadura', 10 + lw / 2 + 48, 108, 12.5, D.INK2, 'center', false, true);
+      for (i = 0; i < 3; i++) D.text(ctx, cols[i].charAt(0).toUpperCase() + cols[i].slice(1), 142 + i * 62, 128, 13.5, D.INK2, 'center', true);
+      rows.forEach(function (r, ri) {
+        var ry = 166 + ri * 44;
+        D.text(ctx, TD.DMG_NAMES[r].charAt(0).toUpperCase() + TD.DMG_NAMES[r].slice(1), 24, ry, 14.5, D.INK, 'left', true);
+        for (k = 0; k < 3; k++) {
+          var m = TD.DMG[r][cols[k]];
+          ctx.fillStyle = m >= 1.25 ? 'rgba(92,178,74,0.4)' : (m <= 0.75 ? 'rgba(207,43,43,0.3)' : 'rgba(107,82,54,0.15)');
+          D.rr(ctx, 114 + k * 62, ry - 23, 56, 34, 6); ctx.fill();
+          D.text(ctx, '×' + m, 142 + k * 62, ry, 16, D.INK, 'center', true);
+        }
+      });
+      D.wrap(ctx, 'Verde: «¡Muy eficaz!». Rojo: «Resiste». Mirá el texto flotante durante el combate.', 24, 312, lw - 28, 18, 13, D.INK2, 'left', false, true);
+      D.wrap(ctx, 'Jefes: uno por batalla, con tres fases (al 66 % y al 33 % de vida).', 24, 388, lw - 28, 18, 13, D.INK2, 'left', false, true);
+
+      // torres
+      var qx = 20 + lw, qw = W - qx - 10;
+      D.panel(ctx, qx, 52, qw, 420);
+      D.text(ctx, 'Torres', qx + qw / 2, 82, 18, D.INK, 'center', true);
+      TD.TOWER_KEYS.forEach(function (key, n) {
+        var def = TD.TOWERS[key], ty = 112 + n * 91, fx = qx + 92, fw = qw - 106;
+        D.towerPreview(ctx, key, -1, 0, qx + 48, ty + 34, 0.74, UI.t);
+        fit(ctx, TD.towerName(key) + ' — ' + def.cost + ' de oro · daño ' + TD.DMG_NAMES[def.base.type], fx, ty, fw, 15, D.INK, 'left', true);
+        fit(ctx, def.branches[0].name + ': ' + def.branches[0].desc, fx, ty + 19, fw, 13, D.INK, 'left');
+        fit(ctx, def.branches[1].name + ': ' + def.branches[1].desc, fx, ty + 36, fw, 13, D.INK, 'left');
+        fit(ctx, 'Habilidad (rama completa): ' + def.ability.name, fx, ty + 53, fw, 13, '#2f5f8f', 'left', true);
+      });
+    } else {
+      // enemigos, en tres o cuatro columnas según el ancho
+      var nc = W >= 1140 ? 4 : 3, cw = (W - 40) / nc, rh = nc === 4 ? 96 : 80;
+      D.panel(ctx, 10, 52, W - 20, 420);
+      ENC_LIST.forEach(function (id, n) {
+        encyEnemy(ctx, id, 20 + (n % nc) * cw, 62 + ((n / nc) | 0) * rh, cw - 78);
+      });
+    }
+  }
+
+  /* ---------------- condecoraciones: de a ocho por página ---------------- */
+  function drawLogrosC(ctx) {
+    var L = TD.Logros, tab = UI.logTab, T = L.TIERS[tab], all = L.total(), n, items = [], per = 8;
+    D.parchment(ctx);
+    UI.button(ctx, 10, 7, 108, 38, '← Volver', function () { UI.go(UI.logBack); }, { size: 15 });
+    if (W >= 1000) D.text(ctx, 'Condecoraciones', 132, 35, 24, D.INK, 'left', true);
+    L.TIERS.forEach(function (tr, k) {
+      var c = L.count(k), x = W - 10 - (3 - k) * 172 + 6;
+      UI.button(ctx, x, 7, 166, 38, '', function () { UI.logTab = k; UI.logPage = 0; }, { active: tab === k });
+      L.medal(ctx, x + 20, 32, 0.34, k, 'granada', true);
+      fit(ctx, tr.name + ' · ' + c.got + ' / ' + c.total, x + 38, 32, 120, 15, D.INK, 'left', true);
+      if (c.fresh) badge(ctx, x + 162, 11, c.fresh);
+    });
+
+    for (n = 0; n < L.list.length; n++) if (L.list[n].tier === tab) items.push(L.list[n]);
+    var pages = Math.max(1, Math.ceil(items.length / per)), pg = UI.logPage = TD.clamp(UI.logPage, 0, pages - 1);
+    D.panel(ctx, 10, 52, W - 20, 420);
+    fit(ctx, 'Medallas ' + T.of + ': las ' + T.kind + ' · ' + all.got + ' de ' + all.total + ' en total', 26, 80, W - 250, 15, D.INK, 'left', true);
+    // paginador
+    UI.button(ctx, W - 196, 60, 48, 32, '‹', pg > 0 ? function () { UI.logPage = pg - 1; } : null, { size: 24, disabled: pg <= 0 });
+    D.text(ctx, (pg + 1) + ' / ' + pages, W - 109, 82, 15, D.INK, 'center', true);
+    UI.button(ctx, W - 70, 60, 48, 32, '›', pg < pages - 1 ? function () { UI.logPage = pg + 1; } : null, { size: 24, disabled: pg >= pages - 1 });
+    var gap = 6, cw = (W - 20 - 24 - 10) / 2, ch = (420 - 48 - 12 - 3 * gap) / 4;
+    items.slice(pg * per, pg * per + per).forEach(function (a, i) {
+      logroCard(ctx, a, 22 + (i % 2) * (cw + 10), 100 + ((i / 2) | 0) * (ch + gap), cw, ch);
+    });
+  }
+
+  /* ---------------- ajustes: dos columnas ---------------- */
+  function diffCardC(ctx, key, x, y, w, h) {
+    var d = TD.DIFFS[key], cur = TD.diffKey() === key, hov = UI.hover(x, y, w, h);
+    D.button(ctx, x, y, w, h, hov, { active: cur, primary: cur });
+    if (!cur) ctx.globalAlpha *= 0.8;
+    D.diffIcon(ctx, key, x + w / 2, y + 40, cur ? 1.12 : 1, false, cur ? Math.sin(UI.t * 3) * 0.07 : 0);
+    if (!cur) ctx.globalAlpha /= 0.8;
+    D.text(ctx, d.name, x + w / 2, y + h - 26, 19, D.INK, 'center', true);
+    fit(ctx, '«' + d.motto + '»', x + w / 2, y + h - 9, w - 10, 12, D.INK2, 'center', false, true);
+    UI.zone(x, y, w, h, function () { UI.setDiff(key); });
+  }
+
+  function drawSettingsC(ctx) {
+    var A = TD.Audio, S = TD.Save, w = Math.min(W - 20, 900), h = 464, x = W / 2 - w / 2, y = 8;
+    var g = UI.screen === 'game' ? UI.game : null, live = g && g.state !== 'won' && g.state !== 'lost';
+    var lx = x + 20, lw = 396, rx = lx + lw + 24, rw = x + w - 20 - rx, bw = (rw - 8) / 2;
+    dim(ctx, 0.55);
+    D.panel(ctx, x, y, w, h);
+    D.text(ctx, 'Ajustes', lx, y + 40, 26, D.INK, 'left', true);
+    UI.button(ctx, x + w - 150, y + 12, 130, 40, 'Listo', function () { UI.settings = false; }, { primary: true, size: 19 });
+
+    // dificultad
+    D.text(ctx, 'Dificultad', lx, y + 76, 17, D.INK, 'left', true);
+    TD.DIFF_KEYS.forEach(function (key, n) { diffCardC(ctx, key, lx + n * 134, y + 86, 128, 126); });
+    var yy = wrapMax(ctx, TD.diffText(TD.diffKey()), lx, y + 234, lw, 17, 13.5, D.INK, 2, 'left', false, true);
+    wrapMax(ctx, live ? 'Rige desde ya. Si la bajás en plena batalla, la victoria cuenta con la más baja que usaste.'
+      : 'Podés cambiarla cuando quieras, incluso en plena batalla.', lx, yy + 4, lw, 16, 12.5, D.INK2, 2, 'left', false, true);
+    UI.button(ctx, lx, y + 318, 194, 40, 'Sacudida: ' + (S.data.shake ? 'sí' : 'no'), function () { S.data.shake = !S.data.shake; S.save(); }, { size: 15 });
+    UI.button(ctx, lx + 202, y + 318, 194, 40, 'Números de daño: ' + (S.data.nums ? 'sí' : 'no'), function () { S.data.nums = !S.data.nums; S.save(); }, { size: 14 });
+    if (TD.PWA.canFullscreen()) UI.button(ctx, lx, y + 366, lw, 40, fsLabel(), TD.PWA.toggleFullscreen, { size: 15 });
+
+    // sonido
+    D.text(ctx, 'Efectos de sonido', rx, y + 76, 17, D.INK, 'left', true);
+    slider(ctx, rx + 56, y + 110, rw - 176, A.sfxVol, A.setSfxVol, function () { A.saveVolumes(); A.play('upgrade'); });
+    D.text(ctx, 'Música', rx, y + 164, 17, D.INK, 'left', true);
+    slider(ctx, rx + 56, y + 198, rw - 176, A.musVol, A.setMusicVol, function () { A.saveVolumes(); });
+    UI.button(ctx, rx, y + 242, bw, 40, 'Sonido: ' + (A.on ? 'sí' : 'no'), function () { A.setOn(!A.on); }, { size: 15 });
+    UI.button(ctx, rx + bw + 8, y + 242, bw, 40, 'Música: ' + (A.music ? 'sí' : 'no'), function () { A.setMusic(!A.music); }, { size: 15 });
+  }
+
+  /* ---------------- instalar en iPhone / iPad (no hay aviso automático) ---------------- */
+  function drawIosHelp(ctx) {
+    var w = Math.min(600, W - 40), h = 300, x = W / 2 - w / 2, y = H / 2 - h / 2, yy;
+    dim(ctx, 0.6);
+    D.panel(ctx, x, y, w, h);
+    D.text(ctx, 'Instalar Patria en Armas', W / 2, y + 46, 26, D.INK, 'center', true);
+    yy = D.wrap(ctx, '1. Tocá el botón Compartir del navegador (el cuadrado con una flecha hacia arriba).', x + 36, y + 86, w - 72, 22, 16, D.INK, 'left');
+    yy = D.wrap(ctx, '2. Elegí «Agregar a inicio».', x + 36, yy + 6, w - 72, 22, 16, D.INK, 'left');
+    D.wrap(ctx, '3. Listo: el juego queda en tu pantalla de inicio, con su ícono y a pantalla completa.', x + 36, yy + 6, w - 72, 22, 16, D.INK, 'left');
+    UI.button(ctx, W / 2 - 110, y + h - 62, 220, 44, 'Entendido', function () { UI.iosHelp = false; }, { primary: true, size: 19 });
+  }
+
   /* ---------------- dibujo general ---------------- */
   UI.draw = function (ctx) {
     UI.zones.length = 0;
+    syncView();
+    TF.s = 1; TF.x = 0; TF.y = 0;
     switch (UI.screen) {
-      case 'menu': drawMenu(ctx); break;
-      case 'hero': drawHeroSelect(ctx); break;
-      case 'map': drawMap(ctx); break;
-      case 'ency': drawEncy(ctx); break;
-      case 'logros': drawLogros(ctx); break;
+      case 'menu': if (C) drawMenuC(ctx); else drawMenu(ctx); break;
+      case 'hero': if (C) drawHeroSelectC(ctx); else drawHeroSelect(ctx); break;
+      case 'map': if (C) drawMapC(ctx); else drawMap(ctx); break;
+      case 'ency': if (C) drawEncyC(ctx); else drawEncy(ctx); break;
+      case 'logros': if (C) drawLogrosC(ctx); else drawLogros(ctx); break;
       case 'game': drawGame(ctx); break;
     }
     if (UI.settings) drawSettings(ctx);
+    if (UI.iosHelp) drawIosHelp(ctx);
     drawToast(ctx);
     TD.Juice.drawFade(ctx);
   };
@@ -1111,6 +1721,7 @@
   UI.click = function (x, y) {
     var i, z;
     UI.mx = x; UI.my = y;
+    syncView();
     TD.Audio.init();
     if (TD.Juice.busy()) return;
     for (i = UI.zones.length - 1; i >= 0; i--) {
@@ -1123,13 +1734,20 @@
         return;
       }
     }
-    if (UI.screen === 'game' && UI.game && !UI.modal) UI.game.click(x, y);
+    if (UI.screen === 'game' && UI.game && !UI.modal && !UI.settings) {
+      var wt = worldLayout();
+      if (C && (x < wt.ax || x > wt.ax + wt.aw || y < wt.ay || y > wt.ay + wt.ah)) return;
+      // con el dedo se perdona la puntería: el radio de toque nunca baja de unos 24 px reales
+      var pad = V.touch ? TD.clamp(24 / (V.css * wt.f) - 30, 0, 28) : 0;
+      UI.game.click((x - wt.ox) / wt.f, (y - wt.oy) / wt.f, pad);
+    }
   };
 
   UI.key = function (key) {
     var g = UI.game, k = key.length === 1 ? key.toLowerCase() : key;
     TD.Audio.init();
     if (TD.Juice.busy()) return;
+    if (UI.iosHelp) { if (k === 'Escape' || k === 'Enter') UI.iosHelp = false; return; }
     if (UI.settings) { if (k === 'Escape' || k === 'Enter') UI.settings = false; return; }
     if (UI.screen !== 'game' || !g) {
       if (k === 'Escape') {

@@ -684,6 +684,6 @@
       c.strokeStyle = 'rgba(59,42,26,0.8)'; c.lineWidth = 3; c.strokeRect(14, 14, TD.W - 28, TD.H - 28);
       c.strokeStyle = 'rgba(59,42,26,0.45)'; c.lineWidth = 1; c.strokeRect(22, 22, TD.W - 44, TD.H - 44);
     }
-    ctx.drawImage(menuBg, 0, 0);
+    ctx.drawImage(menuBg, 0, 0, TD.View.w, TD.View.h);      // se estira a la vista (compacta en celulares)
   };
 })();

@@ -494,14 +494,18 @@
   };
 
   /* ---------------- entrada ---------------- */
-  Game.prototype.slotAt = function (x, y) {
-    var i, s;
+  // pad: tolerancia extra (px del mundo) para los toques con el dedo; con ella gana el solar más cercano.
+  Game.prototype.slotAt = function (x, y, pad) {
+    var i, s, d, best = null, bd = Infinity;
+    pad = pad || 0;
     for (i = 0; i < this.slots.length; i++) {
       s = this.slots[i];
-      if (s.tower) { if (Math.abs(x - s.x) < 30 && y > s.y - 62 && y < s.y + 16) return s; }
-      else if (TD.dist(x, y, s.x, s.y - 4) < 30) return s;
+      if (s.tower) { if (!(Math.abs(x - s.x) < 30 + pad && y > s.y - 62 - pad && y < s.y + 16 + pad)) continue; d = TD.dist(x, y, s.x, s.y - 23); }
+      else { d = TD.dist(x, y, s.x, s.y - 4); if (d >= 30 + pad) continue; }
+      if (!pad) return s;
+      if (d < bd) { bd = d; best = s; }
     }
-    return null;
+    return best;
   };
 
   Game.prototype.clampLand = function (x, y) {
@@ -512,8 +516,9 @@
     return TMP;
   };
 
-  Game.prototype.click = function (x, y) {
+  Game.prototype.click = function (x, y, pad) {
     var i, e, s, p;
+    pad = pad || 0;
     if (this.state === 'won' || this.state === 'lost') return;
     // punto de reunión del cuartel
     if (this.mode === 'rally' && this.sel && this.sel.tower) {
@@ -531,14 +536,14 @@
     }
     // héroe
     var h = this.hero;
-    if (!h.dead && Math.abs(x - h.x) < 18 && y > h.y - h.h - 4 && y < h.y + 8) {
+    if (!h.dead && Math.abs(x - h.x) < 18 + pad * 0.6 && y > h.y - h.h - 4 - pad * 0.6 && y < h.y + 8 + pad * 0.6) {
       this.sel = (this.sel && this.sel.hero) ? null : { hero: true };
       this.armed = null;
       TD.Audio.play('click');
       return;
     }
     // solares y torres
-    s = this.slotAt(x, y);
+    s = this.slotAt(x, y, pad);
     if (s) {
       if (s.tower) { this.sel = { tower: s.tower }; this.armed = null; this.mode = null; }
       else if (this.armed) this.build(s, this.armed, true);
@@ -558,7 +563,7 @@
     for (i = this.enemies.length - 1; i >= 0; i--) {
       e = this.enemies[i];
       if (e.dead || e.gone) continue;
-      if (Math.abs(x - e.x) < e.r + 8 && y > e.y - e.h - 6 && y < e.y + 10) { this.sel = { enemy: e }; return; }
+      if (Math.abs(x - e.x) < e.r + 8 + pad && y > e.y - e.h - 6 - pad && y < e.y + 10 + pad) { this.sel = { enemy: e }; return; }
     }
     this.sel = null; this.mode = null;
   };

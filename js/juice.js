@@ -12,7 +12,8 @@
   TD.Juice = J;
 
   var MAX_PARTS = 320, MAX_NUMS = 22, MAX_COINS = 28;
-  var HUD_COIN = { x: 112, y: 22 };
+  // Contador de oro de la barra, en coordenadas del mundo (ui.js lo corrige en el diseño compacto)
+  var HUD_COIN = J.HUD_COIN = { x: 112, y: 22 };
 
   function rnd(a, b) { return a + Math.random() * (b - a); }
   function easeOut(q) { return 1 - (1 - q) * (1 - q); }

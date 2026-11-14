@@ -13,6 +13,16 @@
   TD.TOP_H = 44;     // alto de la barra superior del HUD
   TD.BAR_Y = 640;    // comienzo de la barra inferior del HUD
 
+  // Vista: el lienzo de la interfaz. En PC y tablet coincide con el mundo (1280x720).
+  // En pantallas chicas (celulares) pasa a modo compacto: 480 unidades de alto y un ancho
+  // que acompaña la proporción de la pantalla, así los textos y botones se ven un 50 % más
+  // grandes. main.js la recalcula en cada cambio de tamaño; ui.js elige el diseño según `compact`.
+  //   css: píxeles CSS por unidad · touch: el último toque fue con el dedo
+  TD.View = { w: TD.W, h: TD.H, compact: false, css: 1, touch: false };
+  TD.CH = 480;            // alto de la vista compacta
+  TD.CW_MIN = 854;        // ancho mínimo (16:9) y máximo (bien apaisada) de la vista compacta
+  TD.CW_MAX = 1280;
+
   TD.clamp = function (v, a, b) { return v < a ? a : (v > b ? b : v); };
   TD.lerp = function (a, b, t) { return a + (b - a) * t; };
   TD.dist = function (ax, ay, bx, by) {
