@@ -75,7 +75,10 @@
     var look = TD.LOOKS.tirador;
     for (i = 0; i < n; i++) {
       var sx = (i - (n - 1) / 2) * 11;
-      var o = setFig(look, tw.face, t, (tw.shots % n) === i ? tw.recoil : 0, 0.82);
+      var o = setFig(look, tw.face, t + i * 0.7, tw.recoil, 0.82);
+      // apunta al blanco, retrocede al disparar y recarga con la baqueta entre tiros
+      o.aimUp = tw.aimU != null ? tw.aimU : 1; o.aimA = tw.aimL != null ? tw.aimL : 0.3;
+      o.reload = tw.reload != null && tw.reload >= 0 ? (tw.reload + i * 0.17) % 1 : -1;
       if (b === 0 && L >= 1) { o.coat = '#27457d'; o.plume = D.CELESTE; }
       D.figure(ctx, sx, -H - 3, o);
     }
@@ -110,6 +113,17 @@
     var i;
     var stone = b === 0 && L >= 2;
     var burnt = b === 1 && L >= 2;
+    // artillero detrás del parapeto: atacador para recargar, botafuego para disparar
+    var ca = tw.aim, cside = Math.cos(ca) >= 0 ? 1 : -1;
+    var co = setFig(TD.LOOKS.artillero, cside, t, tw.recoil, 0.82);
+    var rel = tw.reload != null && tw.reload >= 0;
+    co.weapon = rel ? 'rammer' : 'linstock';
+    co.reload = rel ? tw.reload : -1;
+    co.aimA = Math.atan2(Math.sin(ca), Math.abs(Math.cos(ca)));
+    co.hurt = tw.recoil > 0.5 ? (tw.recoil - 0.5) * 1.6 : 0;      // se aparta del estampido
+    co.ready = !rel;
+    if (b === 0 && L >= 2) co.coat = '#27457d';
+    D.figure(ctx, -cside * 15, -6, co);
     // parapeto
     ctx.fillStyle = stone ? '#a09a8e' : (burnt ? '#5a4a3c' : '#9a7a4c');
     ctx.beginPath();
@@ -310,7 +324,9 @@
     // gaucho de guardia
     var look = TD.LOOKS.gauchoPie;
     var o = setFig(look, tw.face, t, tw.recoil, 0.95);
-    if (b === 1) { o.weapon = 'lanza'; o.poncho = '#7a1f1f'; }
+    // revolea las boleadoras justo antes de tirarlas
+    o.wind = tw.tgt && tw.cd != null && tw.cd < 0.55 && tw.disT <= 0 ? 1 - Math.max(0, tw.cd) / 0.55 : 0;
+    if (b === 1) { o.weapon = 'lanza'; o.poncho = '#7a1f1f'; o.ready = !!tw.tgt; }
     if (b === 0 && L >= 2) o.poncho = D.CELESTE;
     D.figure(ctx, 25, 9, o);
   }

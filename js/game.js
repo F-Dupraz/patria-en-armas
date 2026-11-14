@@ -6,7 +6,7 @@
   'use strict';
   var TD = window.TD, D = TD.Draw;
   var TAU = Math.PI * 2;
-  var TMP = {}, PRED = { x: 0, y: 0 }, SHK = { x: 0, y: 0 };
+  var TMP = {}, PRED = { x: 0, y: 0 }, SHK = { x: 0, y: 0 }, MZ = { x: 0, y: 0 };
   var J = TD.Juice;
 
   /* Solares fijos: los explícitos del nivel + una hilera determinística
@@ -169,7 +169,8 @@
 
   Game.prototype.enemyShootTower = function (e, tw, dmg) {
     var naval = e.def.naval, self = this;
-    var sx = e.x + e.face * (naval ? 10 : 12), sy = naval ? e.y - 10 : e.cy() - 2;
+    var sx = e.x + e.face * 10, sy = e.y - 10;
+    if (!naval) { e.muzzle(MZ); sx = MZ.x; sy = MZ.y; }
     this.addFx({ k: 'flash', x: sx, y: sy, ang: Math.atan2(tw.y - 24 - sy, tw.x - sx), dur: 0.1, s: naval ? 1.8 : 1 });
     if (naval) {
       this.addFx({ k: 'smoke', x: sx, y: sy, dur: 0.9, r: 6, grow: 12 });
@@ -185,14 +186,17 @@
       }));
       TD.Audio.play('cannon');
     } else {
+      this.addFx({ k: 'smoke', x: sx, y: sy, dur: 0.6, r: 2.5, grow: 7, rise: 10 });
       this.projs.push(new TD.Proj(this, 'eshot', sx, sy, null, tw.x, tw.y - 28, { onHit: function () { tw.hurt(dmg); } }));
       TD.Audio.play('shot');
     }
   };
 
   Game.prototype.enemyShootSoldier = function (e, s, dmg) {
-    var sx = e.x + e.face * 12, sy = e.cy() - 2;
+    e.muzzle(MZ);
+    var sx = MZ.x, sy = MZ.y;
     this.addFx({ k: 'flash', x: sx, y: sy, ang: Math.atan2(s.y - 14 - sy, s.x - sx), dur: 0.09 });
+    this.addFx({ k: 'smoke', x: sx, y: sy, dur: 0.6, r: 2.5, grow: 7, rise: 10 });
     this.projs.push(new TD.Proj(this, 'eshot', sx, sy, s, s.x, s.y - 14, {
       onHit: function (t) { if (t && !t.dead) t.hurt(dmg); }
     }));

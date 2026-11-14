@@ -270,6 +270,7 @@
     asalto: { kind: 'inf', coat: '#27457d', pants: '#f1ecdc', hat: 'morrion', trim: '#e9c64a', plume: '#cf2b2b', weapon: 'sable', s: 1.05 },
     gaucho: { kind: 'cav', coat: '#8a5a2b', pants: '#3a2a1a', hat: 'gaucho', hatc: '#2a1c12', horse: '#6b4423', weapon: 'lanza', poncho: '#74acdf' },
     tirador: { kind: 'inf', coat: '#74acdf', pants: '#f1ecdc', hat: 'shako', trim: '#f6f2e4', plume: '#f6f2e4', weapon: 'musket', aim: true },
+    artillero: { kind: 'inf', coat: '#1f3a6e', pants: '#f1ecdc', hat: 'bicorne', trim: '#e9c64a', weapon: 'linstock' },
     gauchoPie: { kind: 'inf', coat: '#8a5a2b', pants: '#3a2a1a', hat: 'gaucho', hatc: '#2a1c12', weapon: 'bolas', poncho: '#9a6a3a' }
   };
 })();
