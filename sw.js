@@ -10,7 +10,7 @@
  * ============================================================ */
 'use strict';
 
-var CACHE = 'patria-en-armas-v1';
+var CACHE = 'patria-en-armas-v2';
 
 var ARCHIVOS = [
   './',

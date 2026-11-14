@@ -182,11 +182,6 @@
     }
     ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill(); ctx.stroke();
     ctx.restore();
-    // carita
-    ctx.fillStyle = '#8a6412';
-    ctx.beginPath(); ctx.arc(x - r * 0.33, y - r * 0.15, r * 0.09, 0, TAU); ctx.arc(x + r * 0.33, y - r * 0.15, r * 0.09, 0, TAU); ctx.fill();
-    ctx.strokeStyle = '#8a6412'; ctx.lineWidth = Math.max(1, r / 12);
-    ctx.beginPath(); ctx.arc(x, y + r * 0.15, r * 0.35, 0.25, Math.PI - 0.25); ctx.stroke();
   };
 
   // Bandera patria de la batalla en curso (la fija el Game al empezar; ver TD.flagFor).
