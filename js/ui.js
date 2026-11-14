@@ -1,6 +1,6 @@
 /* ============================================================
  * ui.js — pantallas y HUD, todo dibujado en el canvas:
- * menú, selección de héroe, mapa de campaña, enciclopedia,
+ * menú, selección de héroe, mapa de campaña, enciclopedia, condecoraciones,
  * HUD de batalla, pausa, victoria, derrota y tutorial.
  * Interfaz en modo inmediato: cada cuadro se dibujan los botones
  * y se registran sus zonas de clic.
@@ -15,7 +15,8 @@
     screen: 'menu', t: 0, zones: [], mx: -999, my: -999,
     game: null, modal: null, modalT: 0, starSnd: 0, settings: false, drag: null,
     mapSel: 0, encyTab: 0, encySel: 0, confirmReset: 0,
-    tut: null, heroBack: 'menu'
+    tut: null, heroBack: 'menu',
+    logTab: 0, logBack: 'menu', logNew: {}
   };
   TD.UI = UI;
 
@@ -60,14 +61,27 @@
     TD.Juice.transition(function () { goNow(screen); });
   };
   function goNow(screen) {
+    TD.Logros.flush();                 // contadores de la batalla que se deja
     UI.screen = screen; UI.modal = null; UI.confirmReset = 0; UI.settings = false;
     if (screen !== 'game') UI.game = null;
   }
+
+  // Libro de condecoraciones: se abre en el metal que tenga medallas recién ganadas
+  UI.openLogros = function (from) {
+    UI.logBack = from;
+    TD.Juice.transition(function () {
+      var L = TD.Logros, n;
+      for (n = 2; n >= 0; n--) if (L.count(n).fresh) UI.logTab = n;
+      UI.logNew = L.markSeen();
+      goNow('logros');
+    });
+  };
 
   UI.startLevel = function (idx) {
     TD.Juice.transition(function () { startNow(idx); });
   };
   function startNow(idx) {
+    TD.Logros.flush();
     UI.game = new TD.Game(idx, heroKey());
     UI.screen = 'game';
     UI.modal = 'brief'; UI.modalT = 0;
@@ -118,6 +132,7 @@
   UI.update = function (dt) {
     UI.t += dt; UI.modalT += dt;
     TD.Juice.updateFade(dt);
+    TD.Logros.update(dt);
     if (UI.confirmReset > 0) UI.confirmReset -= dt;
     var g = UI.game;
     updateMusic(g);
@@ -199,16 +214,20 @@
     ctx.fillStyle = D.INK; ctx.fillText('PATRIA EN ARMAS', W / 2, 246);
     D.text(ctx, 'Tower Defense de las Invasiones Inglesas, la Independencia y la Vuelta de Obligado', W / 2, 322, 21, D.INK2, 'center', false, true);
 
-    var bx = W / 2 - 150, by = 356;
-    UI.button(ctx, bx, by, 300, 54, 'Jugar', function () {
+    var bx = W / 2 - 150, by = 342, lc = TD.Logros.total();
+    UI.button(ctx, bx, by, 300, 50, 'Jugar', function () {
       if (TD.Save.data.hero) UI.go('map'); else { UI.heroBack = 'menu'; UI.go('hero'); }
     }, { primary: true, size: 24 });
-    UI.button(ctx, bx, by + 66, 300, 46, 'Enciclopedia', function () { UI.go('ency'); }, { size: 20 });
-    UI.button(ctx, bx, by + 122, 300, 46, 'Ajustes', function () { UI.settings = true; }, { size: 20 });
-    UI.button(ctx, bx, by + 178, 300, 40, UI.confirmReset > 0 ? '¿Seguro? Tocá de nuevo para borrar' : 'Borrar progreso', function () {
-      if (UI.confirmReset > 0) { TD.Save.reset(); TD.Audio.sync(); UI.confirmReset = 0; }
+    UI.button(ctx, bx, by + 58, 300, 40, 'Enciclopedia', function () { UI.go('ency'); }, { size: 19 });
+    UI.button(ctx, bx, by + 106, 300, 40, '', function () { UI.openLogros('menu'); });
+    TD.Logros.medal(ctx, bx + 62, by + 132, 0.36, 2, 'granada', true);
+    D.text(ctx, 'Condecoraciones', bx + 162, by + 132, 19, D.INK, 'center', true);
+    if (lc.fresh) badge(ctx, bx + 296, by + 110, lc.fresh);
+    UI.button(ctx, bx, by + 154, 300, 40, 'Ajustes', function () { UI.settings = true; }, { size: 19 });
+    UI.button(ctx, bx, by + 202, 300, 32, UI.confirmReset > 0 ? '¿Seguro? Tocá de nuevo para borrar' : 'Borrar progreso', function () {
+      if (UI.confirmReset > 0) { TD.Save.reset(); TD.Audio.sync(); TD.Logros.init(); UI.confirmReset = 0; }
       else UI.confirmReset = 4;
-    }, { size: 15, danger: UI.confirmReset > 0 });
+    }, { size: 14, danger: UI.confirmReset > 0 });
 
     // desfile
     ctx.fillStyle = 'rgba(59,42,26,0.18)'; ctx.fillRect(22, 652, W - 44, 3);
@@ -223,6 +242,8 @@
     D.flagPole(ctx, W - 120, 652, 150, 'arg', t + 1, 84, 54, -1);
     D.star(ctx, 1150, 62, 12, true);
     D.text(ctx, TD.Save.totalStars() + ' / ' + (TD.LEVELS.length * 3), 1170, 69, 19, D.INK, 'left', true);
+    TD.Logros.medal(ctx, 62, 71, 0.44, 2, 'granada', true);
+    D.text(ctx, lc.got + ' / ' + lc.total, 80, 69, 19, D.INK, 'left', true);
     D.text(ctx, 'Mouse o táctil · 1-4 torres · Espacio oleada · P/Esc pausa · F velocidad · Q habilidad de torre · H héroe', W / 2, 690, 13, D.INK2, 'center');
   }
 
@@ -365,10 +386,15 @@
     UI.button(ctx, 40, 34, 110, 38, '← Menú', function () { UI.go('menu'); }, { size: 16 });
     UI.button(ctx, 160, 34, 230, 38, 'Héroe: ' + TD.HEROES[heroKey()].name, function () { UI.heroBack = 'map'; UI.go('hero'); }, { size: 16 });
     UI.button(ctx, 400, 34, 150, 38, 'Enciclopedia', function () { UI.go('ency'); }, { size: 16 });
-    diffChip(ctx, 738, 34, 242, 38, 'Dificultad: ', 16);
-    UI.button(ctx, 990, 34, 120, 38, 'Ajustes', function () { UI.settings = true; }, { size: 16 });
-    D.star(ctx, 1150, 54, 13, true);
-    D.text(ctx, TD.Save.totalStars() + ' / ' + (TD.LEVELS.length * 3), 1170, 61, 20, D.INK, 'left', true);
+    diffChip(ctx, 724, 34, 208, 38, 'Dificultad: ', 16);
+    var lc = TD.Logros.total();
+    UI.button(ctx, 940, 34, 104, 38, '', function () { UI.openLogros('map'); });
+    TD.Logros.medal(ctx, 960, 59, 0.36, 2, 'granada', true);
+    D.text(ctx, lc.got + ' / ' + lc.total, 978, 59, 16, D.INK, 'left', true);
+    if (lc.fresh) badge(ctx, 1040, 38, lc.fresh);
+    UI.button(ctx, 1052, 34, 94, 38, 'Ajustes', function () { UI.settings = true; }, { size: 16 });
+    D.star(ctx, 1166, 54, 13, true);
+    D.text(ctx, TD.Save.totalStars() + ' / ' + (TD.LEVELS.length * 3), 1184, 61, 20, D.INK, 'left', true);
 
     drawMapArt(ctx);
 
@@ -425,7 +451,9 @@
     var md = TD.Save.medal(UI.mapSel);
     if (md >= 0) {
       D.diffIcon(ctx, TD.DIFF_KEYS[md], px + 40, yy + 24, 0.4);
-      D.text(ctx, 'Mejor victoria: en ' + TD.DIFFS[TD.DIFF_KEYS[md]].name.toLowerCase(), px + 58, yy + 29, 14, D.INK2, 'left');
+      var sdN = S.starsD[String(UI.mapSel)] ? TD.Save.starsAt(UI.mapSel, md) : -1;      // -1: victoria anterior al registro por dificultad
+      D.text(ctx, 'Mejor victoria: en ' + TD.DIFFS[TD.DIFF_KEYS[md]].name.toLowerCase() +
+        (sdN >= 0 ? ', con ' + sdN + (sdN === 1 ? ' estrella' : ' estrellas') : ''), px + 58, yy + 29, 14, D.INK2, 'left');
     }
     if (open) {
       UI.button(ctx, px + 50, py + ph - 140, pw - 100, 56, '¡A la batalla!', function () { UI.startLevel(UI.mapSel); }, { primary: true, size: 24 });
@@ -521,6 +549,91 @@
       });
       D.text(ctx, 'Jefes: uno por batalla, con tres fases (al 66 % y al 33 % de vida).', 930, 672, 13, D.INK2, 'center', false, true);
     }
+  }
+
+  /* ================================================================
+   *                        CONDECORACIONES
+   * ================================================================ */
+  // Globito rojo con la cantidad de medallas sin mirar
+  function badge(ctx, x, y, n) {
+    ctx.fillStyle = D.PUNZO; ctx.beginPath(); ctx.arc(x, y, 10, 0, TAU); ctx.fill();
+    ctx.strokeStyle = D.BLANCO; ctx.lineWidth = 2; ctx.stroke();
+    D.text(ctx, String(n), x, y + 4.5, 12, '#ffffff', 'center', true);
+  }
+
+  function logroCard(ctx, a, x, y, w, h) {
+    var L = TD.Logros, T = L.TIERS[a.tier], on = L.has(a.id), p = L.progress(a);
+    var s = TD.clamp(h / 86, 0.98, 1.3), x0 = x + 28 + 50 * s, tw = w - (x0 - x) - 14, ty = y + h / 2 - 21, sy = ty + 54, g;
+    D.rr(ctx, x, y, w, h, 8);
+    if (on) {
+      g = ctx.createLinearGradient(0, y, 0, y + h);
+      g.addColorStop(0, '#fbf1cf'); g.addColorStop(1, '#ecd9a4');
+      ctx.fillStyle = g; ctx.fill();
+      ctx.strokeStyle = T.lo; ctx.lineWidth = 2; ctx.stroke();
+    } else {
+      ctx.fillStyle = 'rgba(107,82,54,0.10)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(107,82,54,0.45)'; ctx.lineWidth = 1.2; ctx.stroke();
+    }
+    L.medal(ctx, x + 14 + 25 * s, y + h / 2 + 13 * s, s, a.tier, a.icon, on);
+    fit(ctx, a.name, x0, ty, tw, 17, on ? D.INK : '#5d4a32', 'left', true);
+    D.wrap(ctx, a.desc, x0, ty + 18, tw, 15, 12.5, D.INK2, 'left');
+    if (on) {
+      D.star(ctx, x0 + 6, sy - 4, 6, true);
+      D.text(ctx, 'Obtenida', x0 + 17, sy, 12.5, D.GREEN, 'left', true);
+      if (UI.logNew[a.id]) D.text(ctx, '¡Nueva!', x0 + tw, sy, 12.5, D.PUNZO, 'right', true);
+    } else if (p) {
+      var bw = tw - 88;
+      ctx.fillStyle = 'rgba(59,42,26,0.22)'; D.rr(ctx, x0, sy - 8, bw, 7, 3.5); ctx.fill();
+      if (p[0] > 0) { ctx.fillStyle = T.mid; D.rr(ctx, x0, sy - 8, Math.max(7, bw * p[0] / p[1]), 7, 3.5); ctx.fill(); }
+      ctx.strokeStyle = 'rgba(59,42,26,0.6)'; ctx.lineWidth = 1; D.rr(ctx, x0, sy - 8, bw, 7, 3.5); ctx.stroke();
+      D.text(ctx, L.fmt(p[0]) + ' / ' + L.fmt(p[1]), x0 + tw, sy, 12.5, D.INK2, 'right', true);
+    } else {
+      D.text(ctx, 'Pendiente', x0, sy, 12.5, '#8b7a5c', 'left', false, true);
+    }
+  }
+
+  function drawLogros(ctx) {
+    var L = TD.Logros, tab = UI.logTab, T = L.TIERS[tab], all = L.total(), n, items = [];
+    D.parchment(ctx);
+    UI.button(ctx, 40, 34, 120, 38, '← Volver', function () { UI.go(UI.logBack); }, { size: 16 });
+    D.text(ctx, 'Condecoraciones', 180, 66, 34, D.INK, 'left', true);
+    // una pestaña por metal: bronce (fáciles), plata (normales) y oro (difíciles)
+    L.TIERS.forEach(function (tr, k) {
+      var c = L.count(k), x = 632 + k * 206;
+      UI.button(ctx, x, 34, 196, 38, '', function () { UI.logTab = k; }, { active: tab === k });
+      L.medal(ctx, x + 22, 59, 0.36, k, 'granada', true);
+      fit(ctx, tr.name + ' · ' + c.got + ' / ' + c.total, x + 42, 59, 146, 17, D.INK, 'left', true);
+      if (c.fresh) badge(ctx, x + 192, 38, c.fresh);
+    });
+
+    D.panel(ctx, 40, 92, 1200, 598);
+    D.text(ctx, 'Medallas ' + T.of + ': las ' + T.kind, 60, 120, 16, D.INK, 'left', true);
+    D.text(ctx, 'Foja de servicios: ' + all.got + ' de ' + all.total + ' condecoraciones', 1220, 120, 14, D.INK2, 'right', false, true);
+    for (n = 0; n < L.list.length; n++) if (L.list[n].tier === tab) items.push(L.list[n]);
+    var rows = Math.ceil(items.length / 3), gap = 8, y0 = 132, ch = Math.min(124, (546 - (rows - 1) * gap) / rows), cw = 382;
+    items.forEach(function (a, i) {
+      logroCard(ctx, a, 56 + (i % 3) * (cw + 11), y0 + ((i / 3) | 0) * (ch + gap), cw, ch);
+    });
+  }
+
+  // Aviso de medalla ganada: en batalla entra por la derecha, bajo la barra; en los menús baja desde arriba
+  function drawToast(ctx) {
+    var L = TD.Logros, c = L.cur;
+    if (!c) return;
+    var a = c.a, T = L.TIERS[a.tier], w = 356, h = 76, inGame = UI.screen === 'game';
+    var q = Math.min(1, c.t / 0.3), e = 1 - (1 - q) * (1 - q) * (1 - q);
+    var x = inGame ? W - w - 12 + (1 - e) * (w + 24) : W / 2 - w / 2;
+    var y = inGame ? (UI.tut ? 124 : 52) : 24 - (1 - e) * (h + 34);
+    ctx.save();
+    ctx.globalAlpha = TD.clamp((L.TOAST - c.t) / 0.4, 0, 1);
+    ctx.fillStyle = 'rgba(30,20,10,0.35)'; D.rr(ctx, x + 3, y + 4, w, h, 10); ctx.fill();
+    ctx.fillStyle = 'rgba(46,32,18,0.96)'; D.rr(ctx, x, y, w, h, 10); ctx.fill();
+    ctx.strokeStyle = T.mid; ctx.lineWidth = 2.2; ctx.stroke();
+    L.medal(ctx, x + 38, y + h / 2 + 11, 0.9 + 0.12 * Math.sin(Math.min(1, c.t / 0.45) * Math.PI), a.tier, a.icon, true);
+    D.text(ctx, 'CONDECORACIÓN ' + T.of.toUpperCase(), x + 76, y + 24, 12, T.mid, 'left', true);
+    fit(ctx, a.name, x + 76, y + 46, w - 90, 20, D.PARCH, 'left', true);
+    fit(ctx, a.desc, x + 76, y + 63, w - 90, 12.5, 'rgba(234,217,173,0.8)', 'left', false, true);
+    ctx.restore();
   }
 
   /* ================================================================
@@ -981,9 +1094,11 @@
       case 'hero': drawHeroSelect(ctx); break;
       case 'map': drawMap(ctx); break;
       case 'ency': drawEncy(ctx); break;
+      case 'logros': drawLogros(ctx); break;
       case 'game': drawGame(ctx); break;
     }
     if (UI.settings) drawSettings(ctx);
+    drawToast(ctx);
     TD.Juice.drawFade(ctx);
   };
 
@@ -1021,6 +1136,7 @@
         if (UI.screen === 'hero') UI.go(UI.heroBack);
         else if (UI.screen === 'map') UI.go('menu');
         else if (UI.screen === 'ency') UI.go(TD.Save.data.hero ? 'map' : 'menu');
+        else if (UI.screen === 'logros') UI.go(UI.logBack);
       } else if ((k === 'Enter' || k === ' ') && UI.screen === 'map' && UI.mapSel < TD.Save.data.unlocked) {
         UI.startLevel(UI.mapSel);
       }
@@ -1051,6 +1167,7 @@
   UI.init = function () {
     TD.Save.load();
     TD.Audio.sync();
+    TD.Logros.init();
     UI.mapSel = Math.min(TD.LEVELS.length - 1, Math.max(0, TD.Save.data.unlocked - 1));
   };
 })();

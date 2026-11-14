@@ -599,6 +599,7 @@
     while (this.level < 6 && this.xp >= TD.HERO_XP[this.level - 1]) {
       this.level++;
       this.pendingUps++;
+      TD.Logros.max('heroLvl', this.level);
       this.maxHp = Math.round(this.maxHp * 1.08);
       this.st.dmg *= 1.06;
       this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.3);
@@ -673,6 +674,7 @@
       g.addText(x, y - 60, '¡Guerra gaucha!', '#ffffff', 16);
     }
     this.abCd = this.abilityCd();
+    TD.Logros.bump('abil');
     TD.Audio.play('ability');
     return true;
   };

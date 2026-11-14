@@ -85,10 +85,12 @@
     });
 
     window.addEventListener('blur', function () { UI.release(); });
+    window.addEventListener('pagehide', function () { TD.Logros.flush(); });
     window.addEventListener('resize', resize);
     window.addEventListener('orientationchange', resize);
     // Pausa automática si se oculta la pestaña en plena batalla
     document.addEventListener('visibilitychange', function () {
+      if (document.hidden) TD.Logros.flush();
       if (document.hidden && UI.screen === 'game' && UI.game && !UI.modal && UI.game.state === 'running') UI.togglePause();
     });
   }
