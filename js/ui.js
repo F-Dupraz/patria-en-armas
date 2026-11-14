@@ -211,36 +211,60 @@
     return HERO_FIG;
   }
 
+  // Presencia histórica de cada héroe en cada acto (ver epochs en data.js)
+  var EPOCH_COL = { yes: '#5cb24a', part: '#e9c64a', no: '#cf5a4a' };
+  var EPOCH_TAG = ['I', 'II', 'III'];
+
   function drawHeroSelect(ctx) {
     var t = UI.t;
     D.parchment(ctx);
-    D.text(ctx, 'Elegí tu héroe', W / 2, 78, 40, D.INK, 'center', true);
-    D.text(ctx, 'Te acompaña en toda la campaña. Podés cambiarlo cuando quieras desde el mapa.', W / 2, 108, 16, D.INK2, 'center', false, true);
+    D.text(ctx, 'Elegí tu héroe', W / 2, 52, 36, D.INK, 'center', true);
+    D.text(ctx, 'Te acompaña en toda la campaña. Podés cambiarlo cuando quieras desde el mapa.', W / 2, 78, 15, D.INK2, 'center', false, true);
     TD.HERO_KEYS.forEach(function (key, n) {
-      var def = TD.HEROES[key], x = 60 + n * 395, y = 132, w = 370, h = 520;
+      var def = TD.HEROES[key], x = 60 + n * 395, y = 94, w = 370, h = 560;
       var cur = TD.Save.data.hero === key;
       D.panel(ctx, x, y, w, h);
       if (cur) { ctx.strokeStyle = '#2f6ea8'; ctx.lineWidth = 4; D.rr(ctx, x - 3, y - 3, w + 6, h + 6, 12); ctx.stroke(); }
       // retrato
       ctx.fillStyle = 'rgba(116,172,223,0.3)';
-      ctx.beginPath(); ctx.arc(x + w / 2, y + 108, 84, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(x + w / 2, y + 88, 76, 0, TAU); ctx.fill();
       ctx.strokeStyle = D.INK2; ctx.lineWidth = 2; ctx.stroke();
-      var o = heroFig(key, t, key === 'guemes' ? 2.7 : 3.4);
+      var o = heroFig(key, t, key === 'guemes' ? 2.4 : 3.0);
       o.atk = UI.hover(x, y, w, h) ? (t * 1.2) % 1 : 0;
-      D.shadow(ctx, x + w / 2, y + 170, 46, 10);
-      D.unit(ctx, x + w / 2 - (key === 'guemes' ? 8 : 0), y + 168, o);
-      D.text(ctx, def.name, x + w / 2, y + 226, 30, D.INK, 'center', true);
-      D.text(ctx, def.title, x + w / 2, y + 250, 15, D.INK2, 'center', false, true);
-      var yy = D.wrap(ctx, def.bio, x + 24, y + 282, w - 48, 20, 15, D.INK, 'left');
-      yy += 8;
+      D.shadow(ctx, x + w / 2, y + 150, 42, 9);
+      D.unit(ctx, x + w / 2 - (key === 'guemes' ? 8 : 0), y + 148, o);
+      D.text(ctx, def.name, x + w / 2, y + 196, 30, D.INK, 'center', true);
+      D.text(ctx, def.title, x + w / 2, y + 220, 15, D.INK2, 'center', false, true);
+      var yy = D.wrap(ctx, def.bio, x + 24, y + 250, w - 48, 20, 15, D.INK, 'left');
+      yy += 6;
       D.text(ctx, 'Habilidad: ' + def.ability.name, x + 24, yy, 16, '#2f5f8f', 'left', true);
       yy = D.wrap(ctx, def.ability.desc, x + 24, yy + 22, w - 48, 20, 15, D.INK, 'left');
-      D.text(ctx, 'Vida ' + def.hp + ' · Daño ' + def.dmg + ' (' + TD.DMG_NAMES[def.type] + ') · Vel. ' + def.spd, x + w / 2, y + h - 78, 13, D.INK2, 'center');
-      UI.button(ctx, x + 60, y + h - 62, w - 120, 44, cur ? 'Seguir con ' + def.name : 'Elegir a ' + def.name, function () {
+
+      // ¿En qué actos estuvo realmente?
+      yy += 8;
+      ctx.strokeStyle = 'rgba(59,42,26,0.35)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x + 24, yy - 12); ctx.lineTo(x + w - 24, yy - 12); ctx.stroke();
+      D.text(ctx, 'En la historia real', x + 24, yy + 4, 14, D.INK, 'left', true);
+      def.epochs.forEach(function (ep, i) {
+        var ry = yy + 14 + i * 24;
+        ctx.fillStyle = EPOCH_COL[ep.s]; D.rr(ctx, x + 24, ry, 34, 18, 5); ctx.fill();
+        ctx.strokeStyle = D.INK2; ctx.lineWidth = 1; D.rr(ctx, x + 24, ry, 34, 18, 5); ctx.stroke();
+        D.text(ctx, EPOCH_TAG[i], x + 41, ry + 14, 13, ep.s === 'no' ? '#fff' : D.INK, 'center', true);
+        fit(ctx, ep.t, x + 66, ry + 14, w - 66 - 20, 12.5, D.INK, 'left');
+      });
+
+      D.text(ctx, 'Vida ' + def.hp + ' · Daño ' + def.dmg + ' (' + TD.DMG_NAMES[def.type] + ') · Vel. ' + def.spd, x + w / 2, y + h - 62, 13, D.INK2, 'center');
+      UI.button(ctx, x + 60, y + h - 50, w - 120, 38, cur ? 'Seguir con ' + def.name : 'Elegir a ' + def.name, function () {
         TD.Save.data.hero = key; TD.Save.save();
         UI.go('map');
-      }, { primary: true, size: 18 });
+      }, { primary: true, size: 17 });
     });
+
+    // aviso: la selección no refleja la historia
+    ctx.fillStyle = 'rgba(179,20,42,0.12)'; D.rr(ctx, 60, 664, W - 120, 46, 8); ctx.fill();
+    ctx.strokeStyle = D.PUNZO; ctx.lineWidth = 2; D.rr(ctx, 60, 664, W - 120, 46, 8); ctx.stroke();
+    D.text(ctx, 'Esta selección de héroes no representa la realidad: es solamente para fines del juego.', W / 2, 685, 16, D.INK, 'center', true);
+    D.text(ctx, 'Actos: I · 1806-07   II · 1812-18   III · 1845        Verde: estuvo · Amarillo: estuvo en parte · Rojo: no estuvo', W / 2, 702, 12, D.INK2, 'center');
     UI.button(ctx, 40, 34, 120, 38, '← Volver', function () { UI.go(UI.heroBack); }, { size: 16 });
   }
 
@@ -418,7 +442,7 @@
         ctx.fillStyle = D.PUNZO; ctx.beginPath(); ctx.arc(512, yy - 6, 4, 0, TAU); ctx.fill();
         yy = D.wrap(ctx, line, 530, yy, 660, 27, 19, D.INK, 'left') + 18;
       });
-      D.flagPole(ctx, 1180, 660, 70, 'arg', UI.t, 44, 28, -1);
+      D.flagPole(ctx, 1180, 660, 70, TD.flagFor(lv), UI.t, 44, 28, -1);
       D.text(ctx, 'Datos generales de contexto. El terreno y las tropas del juego son aproximados.', 850, 668, 13, D.INK2, 'center', false, true);
     } else {
       // tabla de daño contra armadura
@@ -444,7 +468,7 @@
       TD.TOWER_KEYS.forEach(function (key, n) {
         var def = TD.TOWERS[key], ty = 420 + n * 68;
         D.towerPreview(ctx, key, -1, 0, 84, ty + 30, 0.72, UI.t);
-        D.text(ctx, def.name + ' — ' + def.cost + ' de oro · daño ' + TD.DMG_NAMES[def.base.type], 130, ty, 15, D.INK, 'left', true);
+        D.text(ctx, TD.towerName(key) + ' — ' + def.cost + ' de oro · daño ' + TD.DMG_NAMES[def.base.type], 130, ty, 15, D.INK, 'left', true);
         fit(ctx, def.branches[0].name + ': ' + def.branches[0].desc, 130, ty + 17, 450, 13, D.INK, 'left');
         fit(ctx, def.branches[1].name + ': ' + def.branches[1].desc, 130, ty + 32, 450, 13, D.INK, 'left');
         fit(ctx, 'Habilidad (rama completa): ' + def.ability.name, 130, ty + 47, 450, 12, '#2f5f8f', 'left', true);
@@ -493,7 +517,7 @@
     var hov = UI.hover(x, y, w, h);
     D.button(ctx, x, y, w, h, hov && can, { disabled: !can, active: active });
     D.towerIcon(ctx, key, x + 26, y + h / 2, 1.5);
-    fit(ctx, def.name, x + 52, y + 26, w - 60, 15, can ? D.INK : '#8b7a5c', 'left', true);
+    fit(ctx, TD.towerName(key, g.lvl.act), x + 52, y + 26, w - 60, 15, can ? D.INK : '#8b7a5c', 'left', true);
     D.coin(ctx, x + 60, y + 45, 7);
     D.text(ctx, String(def.cost), x + 72, y + 50, 15, can ? D.INK : '#a0522d', 'left', true);
     D.text(ctx, '[' + (n + 1) + ']', x + w - 10, y + 50, 13, D.INK2, 'right', true);

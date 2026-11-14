@@ -18,7 +18,7 @@
     this.maxHp = 140; this.hp = 140; this.disT = 0; this.buffT = 0; this.abCd = 0;
     this.soldiers = [];
     this.rally = null;
-    // punto del camino terrestre más cercano (para reunión, malón, etc.)
+    // punto del camino terrestre más cercano (para reunión, montonera, etc.)
     var best = null, i, n;
     for (i = 0; i < g.paths.length; i++) {
       if (g.paths[i].naval) continue;
@@ -95,8 +95,9 @@
   Tower.prototype.sellValue = function () { return Math.round(this.invested * TD.SELL_RATE); };
 
   Tower.prototype.title = function () {
-    if (this.branch < 0) return this.def.name;
-    return this.def.name + ' — ' + this.def.branches[this.branch].name + ' ' + ['I', 'II', 'III'][this.level - 1];
+    var nm = TD.towerName(this.key, this.g.lvl.act);
+    if (this.branch < 0) return nm;
+    return nm + ' — ' + this.def.branches[this.branch].name + ' ' + ['I', 'II', 'III'][this.level - 1];
   };
 
   // Texto de estadísticas para el HUD
@@ -353,7 +354,7 @@
       g.addText(this.x, this.y - 96, '¡Tiro certero!', '#ffffff', 17);
       TD.Audio.play('shot');
     } else {
-      // Malón: gauchos a caballo por unos segundos
+      // Montonera: gauchos a caballo por unos segundos
       var nx = this.near.x, ny = this.near.y;
       for (i = 0; i < 5; i++) {
         var s = new TD.Soldier(g, null, this.x + TD.rand(-10, 10), this.y + TD.rand(0, 12), {
@@ -364,7 +365,7 @@
         g.soldiers.push(s);
       }
       g.addFx({ k: 'dust', x: nx, y: ny, r: 70, dur: 0.9, seed: 5 });
-      g.addText(this.x, this.y - 60, '¡Malón!', '#ffffff', 17);
+      g.addText(this.x, this.y - 60, '¡Montonera!', '#ffffff', 17);
       TD.Audio.play('horn');
     }
     this.abCd = this.def.ability.cd;

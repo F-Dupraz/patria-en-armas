@@ -25,7 +25,9 @@
    * se desbloquea la habilidad activa.                              */
   TD.TOWERS = {
     granaderos: {
-      name: 'Granaderos', short: 'Cuartel', cost: 70,
+      // La clave interna sigue siendo 'granaderos'; el nombre visible cambia según el acto:
+      // 1806-07 defendió Buenos Aires el Regimiento de Patricios; los Granaderos a Caballo nacen en 1812.
+      name: 'Granaderos', names: ['Patricios', 'Granaderos', 'Infantería'], short: 'Cuartel', cost: 70,
       desc: 'Cuartel: tres soldados que bloquean el paso y pelean cuerpo a cuerpo.',
       base: { sHp: 85, sDmg: 7, sRate: 1.0, sArmor: 0, respawn: 9, range: 140, type: 'cont' },
       branches: [
@@ -105,8 +107,16 @@
             { cost: 240, dmg: 72, rate: 1.0, ambush: true, back: 0.8, type: 'perf', slow: 0.2, slowT: 1 }
           ] }
       ],
-      ability: { name: 'Malón', cd: 24, desc: 'Invoca varios gauchos a caballo por unos segundos.' }
+      ability: { name: 'Montonera', cd: 24, desc: 'Invoca varios gauchos a caballo por unos segundos.' }
     }
+  };
+
+  // Nombre visible de una torre según el acto (0, 1, 2). Sin acto: todas las variantes.
+  TD.towerName = function (key, act) {
+    var d = TD.TOWERS[key];
+    if (!d.names) return d.name;
+    if (act != null && d.names[act]) return d.names[act];
+    return d.names.slice(0, 2).join(' / ');
   };
 
   /* ---------- Enemigos ----------
@@ -203,6 +213,12 @@
       bio: 'Creador de los Granaderos a Caballo. Resistente y de sable firme: ideal para plantar en un cruce.',
       hp: 440, dmg: 24, rate: 0.9, spd: 85, armor: 0.2, type: 'perf', regen: 5,
       look: { kind: 'inf', coat: '#1f3a6e', pants: '#f1ecdc', hat: 'bicorne', trim: '#e9c64a', plume: '#74acdf', weapon: 'sable', s: 1.35, epaulettes: true },
+      // Presencia histórica por acto: 'yes' estuvo · 'part' estuvo en parte · 'no' no estuvo
+      epochs: [
+        { s: 'no',   t: 'En España, lejos del Río de la Plata' },
+        { s: 'part', t: 'Desde 1812: 4 de 5 batallas (no Tucumán)' },
+        { s: 'no',   t: 'Exiliado en Francia (murió en 1850)' }
+      ],
       ability: { name: 'Carga de granaderos', cd: 24, desc: 'Una carga de caballería arrolla la zona: daña y aturde.' },
       tree: [
         { name: 'Temple', desc: '+25 % de vida y más regeneración.' },
@@ -215,6 +231,11 @@
       bio: 'Abogado devenido general y creador de la bandera. Pelea menos, pero vuelve mejores a todos los demás.',
       hp: 340, dmg: 18, rate: 1.0, spd: 80, armor: 0.1, type: 'cont', regen: 4,
       look: { kind: 'inf', coat: '#27457d', pants: '#f1ecdc', hat: 'bicorne', trim: '#f6f2e4', plume: '#f6f2e4', weapon: 'sable', s: 1.3, epaulettes: true, sash: '#74acdf' },
+      epochs: [
+        { s: 'no',   t: 'No fue protagonista: se fue en 1806' },
+        { s: 'part', t: 'Solo en Tucumán (1812)' },
+        { s: 'no',   t: 'Murió en 1820' }
+      ],
       ability: { name: 'Jurar la bandera', cd: 28, desc: 'Las torres cercanas disparan más rápido y tus soldados se curan.' },
       tree: [
         { name: 'Constancia', desc: '+25 % de vida y más regeneración.' },
@@ -227,6 +248,11 @@
       bio: 'Defendió la frontera norte con sus gauchos. Veloz, a caballo: llega a todos lados y frena columnas enteras.',
       hp: 360, dmg: 20, rate: 0.65, spd: 130, armor: 0.1, type: 'perf', regen: 4,
       look: { kind: 'cav', coat: '#9a1b22', pants: '#3a2a1a', hat: 'gaucho', hatc: '#2a1c12', trim: null, horse: '#4a2f1c', weapon: 'lanza', s: 1.25, poncho: '#b3142a' },
+      epochs: [
+        { s: 'yes', t: 'Peleó en 1806 (toma del buque Justina)' },
+        { s: 'no',  t: 'Peleaba en Salta, no en estas batallas' },
+        { s: 'no',  t: 'Murió en 1821' }
+      ],
       ability: { name: 'Guerra gaucha', cd: 22, desc: 'Emboscada general: ralentiza y hiere a todos los enemigos cercanos.' },
       tree: [
         { name: 'Aguante', desc: '+25 % de vida y más regeneración.' },
