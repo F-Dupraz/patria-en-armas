@@ -394,6 +394,13 @@
     return false;
   };
 
+  /* Bandera de cada época: 'es' (1806-07, bandera española), 'cb' (celeste y blanca
+   * sin sol, 1812-1817) y 'arg' (con Sol de Mayo, incorporado en 1818). */
+  TD.flagFor = function (lvl) {
+    if (lvl.act === 0) return 'es';
+    return parseInt(lvl.year, 10) < 1818 ? 'cb' : 'arg';
+  };
+
   // Resumen de una oleada para el HUD: "Casaca roja ×8 · Explorador ×3"
   TD.waveSummary = function (wave) {
     var count = {}, order = [], i, g;

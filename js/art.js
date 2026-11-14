@@ -97,9 +97,9 @@
       ctx.fillStyle = L >= 3 ? '#8a5a2b' : '#b89a4e';
       ctx.beginPath(); ctx.moveTo(-Wd - 4, -H - 29); ctx.lineTo(0, -H - 43); ctx.lineTo(Wd + 4, -H - 29); ctx.closePath(); ctx.fill();
       ctx.strokeStyle = '#5a4a22'; ctx.lineWidth = 1.2; ctx.stroke();
-      if (L >= 3) D.flagPole(ctx, 0, -H - 42, 16, 'arg', t, 15, 9, 1);
+      if (L >= 3) D.flagPole(ctx, 0, -H - 42, 16, D.natFlag(), t, 15, 9, 1);
     }
-    if (b === 1 && L >= 3) D.flagPole(ctx, Wd - 1, -H - 4, 26, 'arg', t, 13, 8, 1);
+    if (b === 1 && L >= 3) D.flagPole(ctx, Wd - 1, -H - 4, 26, D.natFlag(), t, 13, 8, 1);
     if (b < 0) {
       ctx.fillStyle = D.CELESTE;
       ctx.beginPath(); ctx.moveTo(-Wd, -H - 11); ctx.lineTo(-Wd - 9, -H - 8); ctx.lineTo(-Wd, -H - 5); ctx.closePath(); ctx.fill();
@@ -170,7 +170,7 @@
     ctx.stroke();
     ctx.fillStyle = '#3d2a1c'; ctx.beginPath(); ctx.arc(0, -10, 2.2, 0, TAU); ctx.fill();
     // banderas
-    if (L >= 3) D.flagPole(ctx, 22, 2, 38, b === 1 ? 'punzo' : 'arg', t, 16, 10, 1);
+    if (L >= 3) D.flagPole(ctx, 22, 2, 38, b === 1 ? 'punzo' : D.natFlag(), t, 16, 10, 1);
     else if (b < 0) { ctx.fillStyle = D.CELESTE; ctx.fillRect(-24, -17, 6, 3); }
   }
 
@@ -242,7 +242,7 @@
     }
     // bandera
     var top = b === 1 ? -Ht - 13 - L * 2 : -Ht - (b === 0 ? 5 : 3);
-    D.flagPole(ctx, b === 1 ? 0 : -W + 4, top, 18 + L * 2, b === 1 && L >= 3 ? 'punzo' : 'arg', t, 14 + L, 9 + L * 0.5, 1);
+    D.flagPole(ctx, b === 1 ? 0 : -W + 4, top, 18 + L * 2, b === 1 && L >= 3 ? 'punzo' : D.natFlag(), t, 14 + L, 9 + L * 0.5, 1);
   }
 
   function towerGauchos(ctx, tw, b, L, t) {
@@ -296,7 +296,7 @@
       ctx.fillStyle = D.BLANCO; ctx.beginPath(); ctx.ellipse(0, -14, 3, 3.6, 0, 0, TAU); ctx.fill();
       ctx.strokeStyle = D.BLANCO; ctx.lineWidth = 1.4;
       ctx.beginPath(); ctx.moveTo(-3, -15); ctx.quadraticCurveTo(-8, -16, -8, -20); ctx.moveTo(3, -15); ctx.quadraticCurveTo(8, -16, 8, -20); ctx.stroke();
-      D.flagPole(ctx, 0, -35, 14, 'arg', t, 13, 8, 1);
+      D.flagPole(ctx, 0, -35, 14, D.natFlag(), t, 13, 8, 1);
     }
     if (b === 1) {
       // pajonal para esconderse

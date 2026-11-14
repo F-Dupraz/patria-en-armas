@@ -189,7 +189,11 @@
     ctx.beginPath(); ctx.arc(x, y + r * 0.15, r * 0.35, 0.25, Math.PI - 0.25); ctx.stroke();
   };
 
-  // Banderas: 'arg', 'uk', 'fr', 'es', 'punzo'. (x, y) = esquina superior del paño junto al asta.
+  // Bandera patria de la batalla en curso (la fija el Game al empezar; ver TD.flagFor).
+  D.natFlag = function () { return window.TD.curFlag || 'arg'; };
+
+  // Banderas: 'arg' (con sol), 'cb' (celeste y blanca sin sol), 'uk', 'fr', 'es', 'punzo'.
+  // (x, y) = esquina superior del paño junto al asta.
   D.flag = function (ctx, x, y, w, h, kind, t, dir) {
     dir = dir < 0 ? -1 : 1;
     var wave = Math.sin((t || 0) * 5) * h * 0.12, i;
@@ -205,9 +209,11 @@
       ctx.quadraticCurveTo(w * 0.5, y1 + wave, 0, y1);
       ctx.closePath(); ctx.fill();
     }
-    if (kind === 'arg') {
+    if (kind === 'arg' || kind === 'cb') {
       band(0, h / 3, D.CELESTE); band(h / 3, 2 * h / 3, D.BLANCO); band(2 * h / 3, h, D.CELESTE);
-      ctx.fillStyle = D.GOLD; ctx.beginPath(); ctx.arc(w * 0.5, h * 0.5 + wave * 0.5, h * 0.12, 0, TAU); ctx.fill();
+      if (kind === 'arg') {   // el Sol de Mayo se incorporó en 1818
+        ctx.fillStyle = D.GOLD; ctx.beginPath(); ctx.arc(w * 0.5, h * 0.5 + wave * 0.5, h * 0.12, 0, TAU); ctx.fill();
+      }
     } else if (kind === 'fr') {
       for (i = 0; i < 3; i++) {
         ctx.fillStyle = [D.FRBLUE, D.BLANCO, D.SCARLET][i];
@@ -692,7 +698,7 @@
           a = i * TAU / 8 + f.t * 0.6;
           ctx.beginPath(); ctx.moveTo(f.x + Math.cos(a) * 20, f.y - 30 + Math.sin(a) * 14); ctx.lineTo(f.x + Math.cos(a) * 46, f.y - 30 + Math.sin(a) * 30); ctx.stroke();
         }
-        D.flagPole(ctx, f.x + 12, f.y, 52 * rise, 'arg', f.t, 30, 20, 1);
+        D.flagPole(ctx, f.x + 12, f.y, 52 * rise, D.natFlag(), f.t, 30, 20, 1);
         break;
       case 'puff':
         ctx.globalAlpha = (1 - p) * 0.7;

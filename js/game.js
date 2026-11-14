@@ -43,6 +43,7 @@
   function Game(idx, heroKey) {
     var lvl = TD.LEVELS[idx], self = this, i;
     this.idx = idx; this.lvl = lvl;
+    TD.curFlag = TD.flagFor(lvl);
     this.paths = lvl.paths.map(function (p) {
       return new TD.Path(p.straight ? p.pts : TD.smooth(p.pts, 12), !!p.naval);
     });
@@ -525,7 +526,7 @@
     for (i = 0; i < this.exits.length; i++) {
       s = this.exits[i];
       if (s.naval) continue;
-      D.flagPole(ctx, s.x, s.y + 4, 46, 'arg', t, 26, 17, 1);
+      D.flagPole(ctx, s.x, s.y + 4, 46, D.natFlag(), t, 26, 17, 1);
     }
 
     // solares vacíos
@@ -556,7 +557,7 @@
       var r = this.sel.tower.rally;
       ctx.strokeStyle = 'rgba(116,172,223,0.9)'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.ellipse(r.x, r.y, 20, 9, 0, 0, TAU); ctx.stroke();
-      D.flagPole(ctx, r.x, r.y, 24, 'arg', t, 12, 8, 1);
+      D.flagPole(ctx, r.x, r.y, 24, D.natFlag(), t, 12, 8, 1);
     }
 
     // entidades ordenadas por profundidad
