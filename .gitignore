@@ -1,0 +1,75 @@
+# ============================================
+# .gitignore - Tower Defense argentino
+# Entorno: Fedora + VS Code
+# ============================================
+
+# ---------- Sistema operativo (Fedora / Linux) ----------
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+.Xauthority
+.cache/
+
+# ---------- Editores ----------
+# VS Code: se ignora todo lo local, pero se dejan
+# los archivos de configuración compartida del proyecto
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# Archivos de espacio de trabajo de VS Code
+*.code-workspace
+
+# Archivos temporales de otros editores
+*.swp
+*.swo
+*.swn
+.idea/
+
+# ---------- Dependencias y herramientas Node (por si se agregan) ----------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+.eslintcache
+
+# ---------- Builds y artefactos ----------
+dist/
+build/
+out/
+coverage/
+.parcel-cache/
+.vite/
+
+# ---------- Logs y temporales ----------
+*.log
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*.txt
+
+# ---------- Secretos y variables de entorno ----------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---------- Otros sistemas (por si el repo se comparte) ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- Notas personales / bitácora local ----------
+# Descomentá si no querés subir notas de desarrollo
+# NOTAS.md
+# bitacora.md
