@@ -220,8 +220,9 @@
     D.parchment(ctx);
     D.text(ctx, 'Elegí tu héroe', W / 2, 52, 36, D.INK, 'center', true);
     D.text(ctx, 'Te acompaña en toda la campaña. Podés cambiarlo cuando quieras desde el mapa.', W / 2, 78, 15, D.INK2, 'center', false, true);
+    D.text(ctx, 'Esta selección de héroes no representa la realidad: es solamente para fines del juego.', W / 2, 100, 14, '#8a5a55', 'center', false, true);
     TD.HERO_KEYS.forEach(function (key, n) {
-      var def = TD.HEROES[key], x = 60 + n * 395, y = 94, w = 370, h = 560;
+      var def = TD.HEROES[key], x = 60 + n * 395, y = 118, w = 370, h = 560;
       var cur = TD.Save.data.hero === key;
       D.panel(ctx, x, y, w, h);
       if (cur) { ctx.strokeStyle = '#2f6ea8'; ctx.lineWidth = 4; D.rr(ctx, x - 3, y - 3, w + 6, h + 6, 12); ctx.stroke(); }
@@ -260,11 +261,6 @@
       }, { primary: true, size: 17 });
     });
 
-    // aviso: la selección no refleja la historia
-    ctx.fillStyle = 'rgba(179,20,42,0.12)'; D.rr(ctx, 60, 664, W - 120, 46, 8); ctx.fill();
-    ctx.strokeStyle = D.PUNZO; ctx.lineWidth = 2; D.rr(ctx, 60, 664, W - 120, 46, 8); ctx.stroke();
-    D.text(ctx, 'Esta selección de héroes no representa la realidad: es solamente para fines del juego.', W / 2, 685, 16, D.INK, 'center', true);
-    D.text(ctx, 'Actos: I · 1806-07   II · 1812-18   III · 1845        Verde: estuvo · Amarillo: estuvo en parte · Rojo: no estuvo', W / 2, 702, 12, D.INK2, 'center');
     UI.button(ctx, 40, 34, 120, 38, '← Volver', function () { UI.go(UI.heroBack); }, { size: 16 });
   }
 
