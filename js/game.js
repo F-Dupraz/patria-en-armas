@@ -44,6 +44,8 @@
   function Game(idx, heroKey) {
     var lvl = TD.LEVELS[idx], self = this, i;
     this.idx = idx; this.lvl = lvl;
+    this.diff = TD.diffKey(); this.dm = TD.DIFFS[this.diff];
+    this.minDiff = TD.DIFF_KEYS.indexOf(this.diff);      // la más baja usada en la batalla: define la medalla
     TD.curFlag = TD.flagFor(lvl);
     this.paths = lvl.paths.map(function (p) {
       return new TD.Path(p.straight ? p.pts : TD.smooth(p.pts, 12), !!p.naval);
@@ -106,6 +108,23 @@
     if (x != null) this.addText(x, y, '+' + n, '#ffd76a', 14);
   };
 
+  /* Cambia la dificultad en plena batalla: los enemigos vivos conservan su
+   * porcentaje de vida y el daño y la velocidad nuevos rigen desde ya.     */
+  Game.prototype.setDiff = function (key) {
+    var nd = TD.DIFFS[key], i, e, f;
+    if (!nd || key === this.diff) return;
+    for (i = 0; i < this.enemies.length; i++) {
+      e = this.enemies[i];
+      if (e.dead || e.gone) continue;
+      f = e.hp / e.maxHp;
+      e.maxHp = Math.max(1, Math.round(e.def.hp * (this.lvl.hpMul || 1) * TD.diffHp(nd, e.def)));
+      e.hp = Math.max(1, e.maxHp * f);
+    }
+    this.diff = key; this.dm = nd;
+    this.minDiff = Math.min(this.minDiff, TD.DIFF_KEYS.indexOf(key));
+    if (this.state === 'running') this.setBanner('Dificultad: ' + nd.name);
+  };
+
   Game.prototype.spawnEnemy = function (type, pi, wi, d0) {
     var e = new TD.Enemy(this, type, pi, wi, d0);
     this.enemies.push(e);
@@ -119,7 +138,7 @@
 
   // Posición estimada de un enemigo dentro de T segundos (para la artillería)
   Game.prototype.predict = function (e, T) {
-    var v = (e.moving && e.stunT <= 0) ? e.def.spd * e.spdMul * (1 - e.slowF) : 0;
+    var v = (e.moving && e.stunT <= 0) ? e.def.spd * this.dm.spd * e.spdMul * (1 - e.slowF) : 0;
     var p = e.path.at(e.d + v * T, TMP);
     PRED.x = p.x - Math.sin(p.ang) * e.off;
     PRED.y = p.y + Math.cos(p.ang) * e.off;
@@ -169,6 +188,7 @@
 
   Game.prototype.enemyShootTower = function (e, tw, dmg) {
     var naval = e.def.naval, self = this;
+    dmg *= this.dm.dmg;
     var sx = e.x + e.face * 10, sy = e.y - 10;
     if (!naval) { e.muzzle(MZ); sx = MZ.x; sy = MZ.y; }
     this.addFx({ k: 'flash', x: sx, y: sy, ang: Math.atan2(tw.y - 24 - sy, tw.x - sx), dur: 0.1, s: naval ? 1.8 : 1 });
@@ -194,6 +214,7 @@
 
   Game.prototype.enemyShootSoldier = function (e, s, dmg) {
     e.muzzle(MZ);
+    dmg *= this.dm.dmg;
     var sx = MZ.x, sy = MZ.y;
     this.addFx({ k: 'flash', x: sx, y: sy, ang: Math.atan2(s.y - 14 - sy, s.x - sx), dur: 0.09 });
     this.addFx({ k: 'smoke', x: sx, y: sy, dur: 0.6, r: 2.5, grow: 7, rise: 10 });
@@ -452,8 +473,9 @@
       met.push(ok);
       if (ok) stars++;
     }
-    this.result = { win: true, stars: stars, met: met };
+    this.result = { win: true, stars: stars, met: met, diff: TD.DIFF_KEYS[this.minDiff] };
     var key = String(this.idx);
+    if (S.medal(this.idx) < this.minDiff) S.data.medals[key] = this.minDiff;
     if (!(S.data.stars[key] >= stars)) S.data.stars[key] = stars;
     if (S.data.unlocked < this.idx + 2) S.data.unlocked = Math.min(TD.LEVELS.length, this.idx + 2);
     S.save();

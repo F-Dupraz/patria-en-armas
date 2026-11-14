@@ -36,7 +36,7 @@
     var def = TD.ENEMIES[type], k;
     this.g = g; this.type = type; this.def = def;
     this.pi = pi; this.path = g.paths[pi]; this.wi = wi;
-    this.maxHp = Math.round(def.hp * (g.lvl.hpMul || 1));
+    this.maxHp = Math.round(def.hp * (g.lvl.hpMul || 1) * TD.diffHp(g.dm, def));
     this.hp = this.maxHp;
     this.d = d0 || 0;
     this.off = (def.naval || def.boss) ? 0 : TD.rand(-9, 9);
@@ -304,14 +304,14 @@
         if (this.atkT <= 0) {
           this.atkT = def.rate || 1;
           this.atkAnim = 1; this.wind = 0;
-          b.hurt(def.dmg || 5, this);
+          b.hurt((def.dmg || 5) * g.dm.dmg, this);
         }
       } else want = Math.atan2(b.y - this.y, b.x - this.x);
     } else if (this.shot) {
       this.moving = false;
       side = true; want = this.lookX >= this.x ? 0 : Math.PI;
     } else {
-      var v = def.spd * this.spdMul * (1 - this.slowF);
+      var v = def.spd * g.dm.spd * this.spdMul * (1 - this.slowF);
       if (def.naval && g.lvl.chainX && Math.abs(this.x - g.lvl.chainX) < 34) v *= 0.3;     // las cadenas frenan a los barcos
       this.d += v * dt;
       this.moving = true;
