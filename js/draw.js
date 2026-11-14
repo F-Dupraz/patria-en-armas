@@ -381,7 +381,7 @@
     ctx.beginPath(); ctx.arc(0, -26, 4.3, 0, TAU); ctx.fill();
     ctx.strokeStyle = 'rgba(30,18,8,0.6)'; ctx.lineWidth = 0.8; ctx.stroke();
     ctx.fillStyle = '#2a1c12'; ctx.fillRect(1.6, -27, 1.3, 1.5);          // ojo
-    hat(ctx, o);
+    if (!o.noHat) hat(ctx, o);
     weapon(ctx, o, sw, t);
   }
 
@@ -393,7 +393,7 @@
     var sw = atk > 0 ? Math.sin((1 - atk) * Math.PI) : 0;
     ctx.save();
     ctx.translate(x, y);
-    ctx.scale(f * s, s);
+    ctx.scale(f * s * (1 + (o.sq || 0) * 0.6), s * (1 - (o.sq || 0)));
     if (o.alpha != null) ctx.globalAlpha = o.alpha;
     ctx.lineCap = 'round';
     ctx.translate(o.aim ? 0 : sw * 3, o.walk ? -Math.abs(wk) * 1.3 : 0);
@@ -423,7 +423,7 @@
     var i;
     ctx.save();
     ctx.translate(x, y);
-    ctx.scale(f * s, s);
+    ctx.scale(f * s * (1 + (o.sq || 0) * 0.6), s * (1 - (o.sq || 0)));
     if (o.alpha != null) ctx.globalAlpha = o.alpha;
     ctx.lineCap = 'round';
     // patas
@@ -466,6 +466,15 @@
   // Dibuja una unidad según su "look" (infante o jinete)
   D.unit = function (ctx, x, y, o) {
     if (o.kind === 'cav') D.rider(ctx, x, y, o); else D.figure(ctx, x, y, o);
+  };
+
+  // Sólo el sombrero, centrado en (x, y) y rotado (para cuando sale volando)
+  D.hatAt = function (ctx, x, y, o, rot, s) {
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(rot || 0); ctx.scale(s || 1, s || 1);
+    ctx.translate(0, 33);
+    hat(ctx, o);
+    ctx.restore();
   };
 
   /* Barco. (x, y) = centro en la línea de flotación. o: ship, flag, face, t, s */

@@ -84,6 +84,8 @@
     if (this.key === 'granaderos') this.syncSoldierStats();
     g.addFx({ k: 'ring', x: this.x, y: this.y, r: 46, color: D.GOLD, dur: 0.5, w: 3 });
     g.addFx({ k: 'dust', x: this.x, y: this.y + 4, r: 30, dur: 0.6, seed: this.level });
+    this.popT = 0.4;
+    for (var sp = 0; sp < 5; sp++) TD.Juice.part(g, { k: 'sparkle', x: this.x + TD.rand(-22, 22), y: this.y - TD.rand(20, 60), vx: 0, vy: -TD.rand(15, 35), life: TD.rand(0.5, 0.9), r: TD.rand(2.5, 4) });
     TD.Audio.play('upgrade');
     if (this.level === 3) {
       this.abCd = 2;
@@ -122,11 +124,13 @@
   Tower.prototype.hurt = function (d) {
     if (this.disT > 0) return;
     this.hp -= d;
+    this.hurtT = 0.25;
     this.g.addFx({ k: 'smoke', x: this.x + TD.rand(-10, 10), y: this.y - 24, dur: 0.6, r: 4, grow: 8 });
     if (this.hp <= 0) {
       this.hp = 0; this.disT = 5;
       this.g.addText(this.x, this.y - 82, '¡Torre fuera de combate!', '#ffb0a0', 14);
       this.g.addFx({ k: 'boom', x: this.x, y: this.y - 18, r: 30, dur: 0.5 });
+      this.g.kick(0.3);
       TD.Audio.play('disabled');
     }
   };
@@ -158,6 +162,8 @@
   Tower.prototype.update = function (dt) {
     var g = this.g, st = this.st, i;
     this.anim += dt;
+    if (this.popT > 0) this.popT -= dt;
+    if (this.hurtT > 0) this.hurtT -= dt;
     if (this.recoil > 0) this.recoil = Math.max(0, this.recoil - dt * 3.2);
     if (this.buffT > 0) this.buffT -= dt;
     if (this.abCd > 0) { this.abCd -= dt; if (this.abCd <= 0 && this.level >= 3) TD.Audio.play('ready'); }
@@ -271,7 +277,6 @@
     this.recoil = 1; this.shots++;
     // el gaucho aparece detrás del enemigo (opuesto a su dirección de marcha)
     var bx = e.x - Math.cos(e.ang) * 26, by = e.y - Math.sin(e.ang) * 26 + 2;
-    var showText = (this.shots % 3) === 0;
     g.addFx({
       k: 'ambush', x: bx, y: by, face: e.x >= bx ? 1 : -1, dur: 0.5, at: 0.16,
       cb: function () {
@@ -279,7 +284,6 @@
         e.damage(st.dmg * (1 + st.back), st.type, {});
         e.slow(st.slow, st.slowT);
         g.addFx({ k: 'slash', x: e.x, y: e.cy(), r: 14, ang: Math.atan2(e.y - by, e.x - bx), dur: 0.22 });
-        if (showText && !e.dead) g.addText(e.x, e.y - e.h - 18, '¡Por la espalda!', '#ffd76a', 13);
         TD.Audio.play('slash');
       }
     });
@@ -315,7 +319,7 @@
       g.addFx({ k: 'ring', x: rx, y: ry, r: 120, color: D.BLANCO, dur: 0.5, w: 4 });
       g.addFx({ k: 'dust', x: rx, y: ry, r: 80, dur: 0.8, seed: 3 });
       g.addText(rx, ry - 56, '¡A la carga!', '#ffffff', 17);
-      g.shake = 0.2;
+      g.kick(0.3);
       TD.Audio.play('ability');
     } else if (this.key === 'artilleria') {
       // Descarga de metralla

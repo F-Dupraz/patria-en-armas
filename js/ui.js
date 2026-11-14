@@ -55,23 +55,30 @@
   function heroKey() { return TD.Save.data.hero || 'sanmartin'; }
 
   /* ---------------- navegación ---------------- */
+  // Todo cambio de pantalla pasa por un fundido breve
   UI.go = function (screen) {
+    TD.Juice.transition(function () { goNow(screen); });
+  };
+  function goNow(screen) {
     UI.screen = screen; UI.modal = null; UI.confirmReset = 0; UI.settings = false;
     if (screen !== 'game') UI.game = null;
-  };
+  }
 
   UI.startLevel = function (idx) {
+    TD.Juice.transition(function () { startNow(idx); });
+  };
+  function startNow(idx) {
     UI.game = new TD.Game(idx, heroKey());
     UI.screen = 'game';
     UI.modal = 'brief'; UI.modalT = 0;
     UI.tut = (TD.LEVELS[idx].tutorial && !TD.Save.data.tutorialDone) ? { step: 0, t: 0 } : null;
-  };
+  }
 
   UI.togglePause = function () {
     var g = UI.game;
     if (!g || g.state === 'won' || g.state === 'lost') return;
     if (UI.modal === 'pause') { UI.modal = null; g.paused = false; TD.Audio.play('resume'); }
-    else if (!UI.modal) { UI.modal = 'pause'; g.paused = true; TD.Audio.play('pause'); }
+    else if (!UI.modal) { UI.modal = 'pause'; UI.modalT = 0; g.paused = true; TD.Audio.play('pause'); }
   };
 
   /* ---------------- actualización ---------------- */
@@ -90,6 +97,7 @@
 
   UI.update = function (dt) {
     UI.t += dt; UI.modalT += dt;
+    TD.Juice.updateFade(dt);
     if (UI.confirmReset > 0) UI.confirmReset -= dt;
     var g = UI.game;
     updateMusic(g);
@@ -544,7 +552,7 @@
     D.text(ctx, String(cost), x + w - 50, y + 22, 15, can ? D.INK : '#a0522d', 'left', true);
     D.wrap(ctx, br.desc, x + 12, y + 40, w - 22, 14, 12, can ? D.INK2 : '#8b7a5c', 'left');
     UI.zone(x, y, w, h, function () {
-      if (!tw.upgrade(b)) { g.addText(tw.x, tw.y - 80, 'Te falta oro', '#ffb0a0', 14); }
+      if (!tw.upgrade(b)) { g.addText(tw.x, tw.y - 80, 'Te falta oro', '#ffb0a0', 14); g.goldDeny = 0.4; }
     });
   }
 
@@ -582,8 +590,21 @@
     var flash = g.lifeFlash > 0 ? 1 + g.lifeFlash : 1;
     D.heart(ctx, 28, 22, 10 * flash);
     D.text(ctx, String(g.lives), 46, 29, 22, g.lives <= 5 ? '#ff9a8a' : D.PARCH, 'left', true);
-    D.coin(ctx, 112, 22, 11);
-    D.text(ctx, String(Math.floor(g.gold)), 130, 29, 22, '#ffd76a', 'left', true);
+    var gp = g.goldPulse > 0 ? g.goldPulse / 0.22 : 0;
+    var gdx = g.goldDeny > 0 ? Math.sin(g.goldDeny * 60) * g.goldDeny * 10 : 0;
+    D.coin(ctx, 112 + gdx, 22, 11 * (1 + gp * 0.25));
+    ctx.save();
+    ctx.translate(130 + gdx, 29); ctx.scale(1 + gp * 0.12, 1 + gp * 0.12);
+    D.text(ctx, String(Math.floor(g.gold)), 0, 0, 22, g.goldDeny > 0 ? '#ff9a8a' : '#ffd76a', 'left', true);
+    ctx.restore();
+    if (g.goldPlusT > 0) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, g.goldPlusT / 0.3);
+      D.font(ctx, 22, true);
+      var gw = ctx.measureText(String(Math.floor(g.gold))).width;
+      D.text(ctx, '+' + g.goldPlus, 136 + gw, 27 - (0.9 - g.goldPlusT) * 6, 14, '#ffe9a8', 'left', true);
+      ctx.restore();
+    }
     D.text(ctx, 'Oleada ' + g.waveIdx + ' / ' + lvl.waves.length, 230, 29, 19, D.PARCH, 'left', true);
     fit(ctx, lvl.name + ' · ' + lvl.year, W / 2, 29, 420, 20, D.PARCH, 'center', true, true);
     // botones de sistema
@@ -616,6 +637,7 @@
       D.font(ctx, 22, true);
       var tw2 = Math.min(900, ctx.measureText(bn.text).width + 70), ty = g.boss ? 98 : 62;
       if (UI.tut) ty = 124;
+      ty -= (1 - Math.min(1, bn.t * 5)) * 10;          // baja deslizándose
       ctx.fillStyle = 'rgba(46,32,18,0.85)';
       ctx.beginPath(); ctx.moveTo(W / 2 - tw2 / 2 - 14, ty + 18); ctx.lineTo(W / 2 - tw2 / 2, ty); ctx.lineTo(W / 2 + tw2 / 2, ty); ctx.lineTo(W / 2 + tw2 / 2 + 14, ty + 18); ctx.lineTo(W / 2 + tw2 / 2, ty + 36); ctx.lineTo(W / 2 - tw2 / 2, ty + 36); ctx.closePath(); ctx.fill();
       ctx.strokeStyle = D.GOLD; ctx.lineWidth = 1.5; ctx.stroke();
@@ -800,7 +822,7 @@
   }
 
   function drawSettings(ctx) {
-    var A = TD.Audio, w = 700, h = 430, x = W / 2 - w / 2, y = H / 2 - h / 2, sx = x + 120, sw = 380;
+    var A = TD.Audio, S = TD.Save, w = 700, h = 490, x = W / 2 - w / 2, y = H / 2 - h / 2, sx = x + 120, sw = 380;
     dim(ctx, 0.55);
     D.panel(ctx, x, y, w, h);
     D.text(ctx, 'Ajustes', W / 2, y + 64, 40, D.INK, 'center', true);
@@ -810,6 +832,8 @@
     slider(ctx, sx, y + 250, sw, A.musVol, A.setMusicVol, function () { A.saveVolumes(); });
     UI.button(ctx, W / 2 - 216, y + 292, 200, 44, 'Sonido: ' + (A.on ? 'sí' : 'no'), function () { A.setOn(!A.on); }, { size: 17 });
     UI.button(ctx, W / 2 + 16, y + 292, 200, 44, 'Música: ' + (A.music ? 'sí' : 'no'), function () { A.setMusic(!A.music); }, { size: 17 });
+    UI.button(ctx, W / 2 - 216, y + 348, 200, 44, 'Sacudida: ' + (S.data.shake ? 'sí' : 'no'), function () { S.data.shake = !S.data.shake; S.save(); }, { size: 17 });
+    UI.button(ctx, W / 2 + 16, y + 348, 200, 44, 'Números de daño: ' + (S.data.nums ? 'sí' : 'no'), function () { S.data.nums = !S.data.nums; S.save(); }, { size: 16 });
     UI.button(ctx, W / 2 - 110, y + h - 74, 220, 48, 'Listo', function () { UI.settings = false; }, { primary: true, size: 21 });
   }
 
@@ -882,11 +906,17 @@
     if (!g) return;
     g.render(ctx);
     drawHUD(ctx, g);
+    TD.Juice.drawOverlay(ctx, g);
     if (UI.tut && !UI.modal) drawTutorial(ctx, g);
-    if (UI.modal === 'brief') drawBrief(ctx, g);
-    else if (UI.modal === 'pause') drawPause(ctx, g);
-    else if (UI.modal === 'levelup') drawLevelUp(ctx, g);
-    else if (UI.modal === 'end') drawEnd(ctx, g);
+    if (UI.modal) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, UI.modalT / 0.16);      // los paneles aparecen con un fundido corto
+      if (UI.modal === 'brief') drawBrief(ctx, g);
+      else if (UI.modal === 'pause') drawPause(ctx, g);
+      else if (UI.modal === 'levelup') drawLevelUp(ctx, g);
+      else if (UI.modal === 'end') drawEnd(ctx, g);
+      ctx.restore();
+    }
   }
 
   /* ---------------- dibujo general ---------------- */
@@ -900,6 +930,7 @@
       case 'game': drawGame(ctx); break;
     }
     if (UI.settings) drawSettings(ctx);
+    TD.Juice.drawFade(ctx);
   };
 
   /* ---------------- entrada ---------------- */
@@ -912,6 +943,7 @@
     var i, z;
     UI.mx = x; UI.my = y;
     TD.Audio.init();
+    if (TD.Juice.busy()) return;
     for (i = UI.zones.length - 1; i >= 0; i--) {
       z = UI.zones[i];
       if (x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h) {
@@ -928,6 +960,7 @@
   UI.key = function (key) {
     var g = UI.game, k = key.length === 1 ? key.toLowerCase() : key;
     TD.Audio.init();
+    if (TD.Juice.busy()) return;
     if (UI.settings) { if (k === 'Escape' || k === 'Enter') UI.settings = false; return; }
     if (UI.screen !== 'game' || !g) {
       if (k === 'Escape') {
