@@ -7,6 +7,7 @@
   var TD = window.TD, D = TD.Draw;
   var TAU = Math.PI * 2;
   var TMP = {};
+  var J = TD.Juice;
 
   /* =========================== ENEMIGO =========================== */
   function Enemy(g, type, pi, wi, d0) {
@@ -71,11 +72,9 @@
     this.hp -= dealt;
     this.sinceHit = 0;
     this.hitFlash = 0.1;
-    if (!o.quiet && this.effT <= 0) {
-      if (m >= 1.25) { this.g.addText(this.x, this.y - this.h - 6, '¡Muy eficaz!', '#b7f09a', 13); this.effT = 1.8; }
-      else if (m <= 0.75) { this.g.addText(this.x, this.y - this.h - 6, 'Resiste', '#d6d0c4', 13); this.effT = 1.8; }
-    }
-    if (o.crit) this.g.addText(this.x + 6, this.y - this.h - 18, '¡Crítico!', '#ffd76a', 14);
+    // la eficacia se ve en las chispas y el número, sin carteles de texto
+    if (!o.aoe && !(o.quiet && Math.random() < 0.5)) J.hit(this.g, this, m, o.crit, type);
+    J.addDmg(this.g, this, dealt, m, o.crit);
     if (this.hp <= 0) this.die(o);
     return dealt;
   };
@@ -105,12 +104,13 @@
       this.summon();
       g.setBanner('¡' + def.name + ' aprieta el paso y pide refuerzos!');
       TD.Audio.play('horn');
+      g.kick(0.3); g.hitStop(0.08);
     } else if (this.phase === 2 && f < 0.33) {
       this.phase = 3; this.spdMul = 1.55;
       this.summon();
       g.setBanner('¡' + def.name + ' ataca las torres!');
       TD.Audio.play('horn');
-      g.shake = 0.4;
+      g.kick(0.45); g.hitStop(0.08);
       if (!def.naval) {
         for (i = 0; i < g.soldiers.length; i++) {
           var s = g.soldiers[i];
@@ -203,6 +203,7 @@
   Enemy.prototype.update = function (dt) {
     var g = this.g, def = this.def;
     this.anim += dt; this.sinceHit += dt; this.effT -= dt; this.hitFlash -= dt;
+    J.tickDmg(g, this, dt);
     if (this.atkAnim > 0) this.atkAnim = Math.max(0, this.atkAnim - dt * 3.5);
     if (this.burnT > 0) {
       this.burnT -= dt;
@@ -247,23 +248,28 @@
     if (this.d >= this.path.length) g.enemyReached(this);
   };
 
+  function drawShip(c, e) { D.ship(c, e.x, e.y, e.o); }
+  function drawUnit(c, u) { D.unit(c, u.x, u.y, u.o); }
+
   Enemy.prototype.draw = function (ctx) {
     var def = this.def, o = this.o, x = this.x, y = this.y, t = this.anim, i;
+    var fl = this.hitFlash > 0 && this.invis <= 0 ? this.hitFlash / 0.1 : 0;
     o.face = this.face; o.t = t; o.walk = this.moving; o.atk = this.atkAnim;
-    o.alpha = this.invis > 0 ? 0.28 : (this.hitFlash > 0 ? 0.72 : 1);
+    o.alpha = this.invis > 0 ? 0.28 : 1;
+    o.sq = def.naval ? 0 : fl * 0.1;
     if (def.boss && !def.naval) {
       ctx.strokeStyle = 'rgba(207,43,43,' + (0.5 + Math.sin(t * 5) * 0.2) + ')'; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.ellipse(x, y, 30, 12, 0, 0, TAU); ctx.stroke();
     }
     if (def.naval) {
-      D.ship(ctx, x, y, o);
+      J.drawFlashed(ctx, x, y, 80, 90, 16, fl * 0.55, drawShip, this);
     } else {
       D.shadow(ctx, x, y + 1, this.r * 1.05, this.r * 0.42);
       if (this.slowT > 0) {
         ctx.strokeStyle = 'rgba(116,172,223,0.9)'; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.ellipse(x, y - 3, this.r * 0.9, 3.5, 0, 0, TAU); ctx.stroke();
       }
-      D.unit(ctx, x, y, o);
+      J.drawFlashed(ctx, x, y, 42, this.h + 26, 6, fl * 0.75, drawUnit, this);
     }
     if (this.burnT > 0) {
       ctx.fillStyle = '#ff9b2f';
@@ -303,7 +309,7 @@
     this.temp = !!st.life; this.life = st.life || 0;
     this.fo = TD.rand(-7, 7);
     this.spd = st.spd || 105; this.engage = st.engage || 62;
-    this.r = 8; this.isHero = false; this.gone = false;
+    this.r = 8; this.isHero = false; this.gone = false; this.hitFlash = 0;
     this.o = {};
     for (k in look) if (Object.prototype.hasOwnProperty.call(look, k)) this.o[k] = look[k];
     this.h = (this.o.kind === 'cav' ? 44 : 38) * (this.o.s || 1);
@@ -350,13 +356,14 @@
     if (this.dead) return;
     this.hp -= dmg * (1 - (this.st.armor || 0));
     this.idleT = 0;
+    this.hitFlash = 0.08;
     if (this.hp <= 0) this.die();
   };
 
   Soldier.prototype.die = function () {
     this.dead = true;
     this.release();
-    this.g.addFx({ k: 'puff', x: this.x, y: this.y, dur: 0.5, seed: this.anim });
+    J.fall(this.g, this);
     if (this.tower) this.respawn = this.tower.st.respawn;
     else if (!this.isHero) this.gone = true;
   };
@@ -368,6 +375,7 @@
   Soldier.prototype.update = function (dt) {
     if (this.dead) return;
     this.anim += dt;
+    if (this.hitFlash > 0) this.hitFlash -= dt;
     if (this.atkAnim > 0) this.atkAnim = Math.max(0, this.atkAnim - dt * 3.5);
     if (this.temp) {
       this.life -= dt;
@@ -414,12 +422,14 @@
     var o = this.o, i;
     o.face = this.face; o.t = this.anim; o.walk = this.moving; o.atk = this.atkAnim;
     o.alpha = this.temp && this.life < 1 ? Math.max(0.2, this.life) : 1;
+    var fl = this.hitFlash > 0 ? this.hitFlash / 0.08 : 0;
+    o.sq = fl * 0.08;
     D.shadow(ctx, this.x, this.y + 1, this.isHero ? 13 : 8, this.isHero ? 5 : 3.5);
     if (this.isHero) {
       ctx.strokeStyle = 'rgba(224,174,50,' + (0.65 + Math.sin(this.anim * 4) * 0.2) + ')'; ctx.lineWidth = 2.5;
       ctx.beginPath(); ctx.ellipse(this.x, this.y, 17, 7, 0, 0, TAU); ctx.stroke();
     }
-    D.unit(ctx, this.x, this.y, o);
+    J.drawFlashed(ctx, this.x, this.y, 42, this.h + 26, 6, fl * 0.6, drawUnit, this);
     if (this.stunT > 0) {
       for (i = 0; i < 3; i++) {
         var a = this.anim * 6 + i * TAU / 3;
@@ -455,7 +465,8 @@
     this.release();
     this.reviveT = 10;
     this.g.stats.heroDeaths++;
-    this.g.addFx({ k: 'puff', x: this.x, y: this.y, dur: 0.6, seed: 1 });
+    J.fall(this.g, this, { dur: 1.8, keepHat: true });
+    this.g.kick(0.25);
     this.g.setBanner(this.def.name + ' cayó: vuelve en unos segundos (cuesta ' + this.reviveCost() + ' de oro).');
     if (this.g.sel && this.g.sel.hero) this.g.sel = null;
   };
@@ -470,6 +481,8 @@
       this.st.dmg *= 1.06;
       this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.3);
       this.g.addText(this.x, this.y - this.h - 16, '¡Nivel ' + this.level + '!', '#ffd76a', 16);
+      this.g.addFx({ k: 'ring', x: this.x, y: this.y, r: 46, color: D.GOLD, dur: 0.6, w: 3 });
+      for (var sp = 0; sp < 6; sp++) J.part(this.g, { k: 'sparkle', x: this.x + TD.rand(-16, 16), y: this.y - TD.rand(10, 40), vx: 0, vy: -TD.rand(20, 45), life: TD.rand(0.6, 1), r: TD.rand(2.5, 4) });
       TD.Audio.play('levelup');
     }
   };
@@ -494,6 +507,7 @@
         g.gold -= this.reviveCost();
         this.revive(this.hx, this.hy);
         g.addFx({ k: 'ring', x: this.x, y: this.y, r: 50, color: D.CELESTE, dur: 0.6 });
+        this.hitFlash = 0.08;
         g.addText(this.x, this.y - 50, '¡' + this.def.name + ' vuelve al combate!', '#ffffff', 14);
       }
       return;
@@ -513,7 +527,7 @@
       }
       g.addFx({ k: 'charge', x: x, y: y, face: this.face, dur: 0.9 });
       g.addFx({ k: 'dust', x: x, y: y, r: 90, dur: 0.9, seed: 2 });
-      g.shake = 0.25;
+      g.kick(0.35); g.hitStop(0.06);
       g.addText(x, y - 60, '¡Carga de granaderos!', '#ffffff', 16);
     } else if (this.key === 'belgrano') {
       for (i = 0; i < g.towers.length; i++) {
@@ -571,6 +585,7 @@
       }
       this.x = TD.lerp(this.sx, this.tx, p);
       this.y = TD.lerp(this.sy, this.ty, p) - this.arc * 4 * p * (1 - p);
+      J.trail(this.g, this);
       return;
     }
     var tg = this.target;

@@ -320,6 +320,13 @@
     D.shadow(ctx, x, y + 5, 30, 10);
     ctx.save();
     ctx.translate(x, y);
+    // aparece con un rebote al construirse o mejorarse; tiembla un poco si la golpean
+    if (tw.popT > 0) {
+      var q = 1 - tw.popT / 0.4, c = 1.7, qq = q - 1;
+      var sy = 0.55 + 0.45 * (1 + qq * qq * ((c + 1) * qq + c));
+      ctx.scale(1 + (1 - sy) * 0.5, sy);
+    }
+    if (tw.hurtT > 0) ctx.translate(Math.sin(tw.hurtT * 80) * tw.hurtT * 6, 0);
     if (tw.disT > 0) ctx.globalAlpha = 0.75;
     switch (tw.key) {
       case 'tiradores': towerTiradores(ctx, tw, tw.branch, tw.level, tw.anim); break;

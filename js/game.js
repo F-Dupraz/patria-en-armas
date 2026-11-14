@@ -6,7 +6,8 @@
   'use strict';
   var TD = window.TD, D = TD.Draw;
   var TAU = Math.PI * 2;
-  var TMP = {}, PRED = { x: 0, y: 0 };
+  var TMP = {}, PRED = { x: 0, y: 0 }, SHK = { x: 0, y: 0 };
+  var J = TD.Juice;
 
   /* Solares fijos: los explícitos del nivel + una hilera determinística
    * a ambos lados de cada camino terrestre.                            */
@@ -50,13 +51,15 @@
     this.waterY = lvl.theme === 'rio' ? D.WATER_Y : null;
     this.slots = TD.genSlots(lvl, this.paths).map(function (s) { return { x: s[0], y: s[1], tower: null }; });
     this.towers = []; this.enemies = []; this.soldiers = []; this.projs = []; this.fx = []; this.texts = [];
+    this.parts = []; this.nums = []; this.coins = [];
+    this.trauma = 0; this.freeze = 0; this.goldPulse = 0; this.goldDeny = 0; this.goldPlus = 0; this.goldPlusT = 0; this.hurtT = 0;
     this.gold = lvl.gold; this.lives = lvl.lives || 20;
     this.time = 0; this.speed = 1; this.paused = false;
     this.state = 'prep';            // prep | running | won | lost
     this.waveIdx = 0; this.nextTimer = 0; this.spawners = []; this.waveLeft = [];
     this.stats = { sold: 0, leaked: 0, heroDeaths: 0, early: 0, built: 0, kills: 0, maxTowers: 0 };
     this.sel = null; this.mode = null; this.armed = null;
-    this.banner = null; this.endT = 0; this.shake = 0; this.result = null;
+    this.banner = null; this.endT = 0; this.result = null;
     this.mx = -999; this.my = -999;
     this.boss = null;
     this.dl = [];
@@ -94,6 +97,9 @@
     f.t = 0;
     this.fx.push(f);
   };
+  Game.prototype.kick = function (amt) { J.kick(this, amt); };
+  // Congela la acción unos milisegundos para remarcar un golpe importante
+  Game.prototype.hitStop = function (t) { if (t > this.freeze) this.freeze = t; };
   Game.prototype.setBanner = function (text) { this.banner = { text: text, t: 0, dur: 3.2 }; };
   Game.prototype.addGold = function (n, x, y) {
     this.gold += n;
@@ -131,7 +137,7 @@
       d = TD.dist(x, y, e.x, e.def.naval ? e.y - 4 : e.y);
       if (d > r + e.r * 0.7) continue;
       f = o.flat || d < r * 0.5 ? 1 : Math.max(0.5, 1 - 0.5 * (d - r * 0.5) / (r * 0.5 + e.r));
-      e.damage(dmg * f * (o.naval && e.def.naval ? o.naval : 1), type, {});
+      e.damage(dmg * f * (o.naval && e.def.naval ? o.naval : 1), type, { aoe: true });
       if (o.burn && !e.dead) {
         if (o.burnT > e.burnT) e.burnT = o.burnT;
         if (o.burn > e.burnDps) e.burnDps = o.burn;
@@ -145,7 +151,9 @@
       TD.Audio.play('boom');
     }
     this.addFx({ k: 'boom', x: x, y: y - 4, r: r, dur: 0.45, fire: type === 'fuego' });
-    if (this.shake < 0.12) this.shake = 0.12;
+    this.addFx({ k: 'shock', x: x, y: y, r: r * 1.3, dur: 0.3 });
+    J.explosion(this, x, y, r, water, type === 'fuego');
+    this.kick(0.22);
   };
 
   Game.prototype.nearestTower = function (x, y, range) {
@@ -169,6 +177,8 @@
         arc: 34,
         onHit: function (x, y) {
           self.addFx({ k: 'boom', x: x, y: y, r: 26, dur: 0.4 });
+          J.explosion(self, x, y + 10, 22, false, false);
+          self.kick(0.15);
           tw.hurt(dmg);
           TD.Audio.play('boom');
         }
@@ -205,21 +215,26 @@
 
   Game.prototype.onKill = function (e, o) {
     var gold = e.def.gold;
-    this.addGold(gold, e.x, e.y - e.h - 2);
+    this.gold += gold;
+    J.coin(this, e.x, e.y - e.h * 0.6, gold);
+    J.flushDmg(this, e);
     this.stats.kills++;
     this.hero.addXp(o.hero ? gold : gold * 0.2);
     if (e.def.naval) {
       this.addFx({ k: 'boom', x: e.x, y: e.y - 8, r: e.r * 1.4, dur: 0.6, fire: true });
       this.addFx({ k: 'splash', x: e.x, y: e.y + 2, r: e.r * 1.5, dur: 0.8 });
       this.addFx({ k: 'smoke', x: e.x, y: e.y - 14, dur: 1.4, r: 10, grow: 24, rise: 40, color: '#4a443e' });
+      J.sink(this, e);
+      this.kick(e.def.boss ? 0 : 0.25);
       TD.Audio.play('boom');
     } else {
-      this.addFx({ k: 'puff', x: e.x, y: e.y - 4, dur: 0.45, seed: e.anim });
+      J.fall(this, e, e.def.boss ? { dur: 2.4, keepHat: false } : null);
       TD.Audio.play('die');
     }
     if (e.def.boss) {
       this.setBanner('¡Cayó ' + e.def.name + '!');
-      this.shake = 0.5;
+      this.kick(0.8);
+      this.hitStop(0.16);
       this.addFx({ k: 'ring', x: e.x, y: e.y, r: 140, color: D.GOLD, dur: 0.9, w: 5 });
       if (this.boss === e) this.boss = null;
     }
@@ -235,8 +250,10 @@
     this.lives -= e.def.lives;
     if (this.lives < 0) this.lives = 0;
     this.stats.leaked++;
-    this.shake = 0.3;
+    this.kick(0.35);
     this.lifeFlash = 0.6;
+    this.hurtT = 0.7;
+    this.addFx({ k: 'puff', x: e.x, y: e.y - 4, dur: 0.45, seed: e.anim });
     if (this.boss === e) this.boss = null;
     if (this.sel && this.sel.enemy === e) this.sel = null;
     TD.Audio.play(this.lives > 0 && this.lives <= 5 ? 'alarm' : 'life');
@@ -286,11 +303,13 @@
     if (!slot || slot.tower || !def) return false;
     if (this.gold < def.cost) {
       this.addText(slot.x, slot.y - 30, 'Te falta oro', '#ffb0a0', 14);
+      this.goldDeny = 0.4;
       TD.Audio.play('deny');
       return false;
     }
     this.gold -= def.cost;
     var tw = new TD.Tower(this, slot, key);
+    tw.popT = 0.4;
     slot.tower = tw;
     this.towers.push(tw);
     this.stats.built++;
@@ -306,7 +325,8 @@
     var i = this.towers.indexOf(tw);
     if (i < 0) return;
     var v = tw.sellValue();
-    this.addGold(v, tw.x, tw.y - 40);
+    this.gold += v;
+    J.coin(this, tw.x, tw.y - 40, v);
     this.stats.sold++;
     tw.dismiss();
     this.towers.splice(i, 1);
@@ -320,6 +340,7 @@
   Game.prototype.update = function (dt) {
     var i;
     if (this.paused || this.state === 'won' || this.state === 'lost') return;
+    if (this.freeze > 0) { this.freeze -= dt; return; }
     for (i = 0; i < this.speed; i++) {
       this.step(dt);
       if (this.state === 'won' || this.state === 'lost') break;
@@ -335,8 +356,9 @@
   Game.prototype.step = function (dt) {
     var i, s, f, t, j;
     this.time += dt;
-    if (this.shake > 0) this.shake -= dt;
     if (this.lifeFlash > 0) this.lifeFlash -= dt;
+    if (this.hurtT > 0) this.hurtT -= dt;
+    J.step(this, dt);
     if (this.banner) { this.banner.t += dt; if (this.banner.t >= this.banner.dur) this.banner = null; }
 
     // oleadas automáticas
@@ -510,7 +532,8 @@
   Game.prototype.render = function (ctx) {
     var i, s, t = this.time, dl = this.dl, e;
     ctx.save();
-    if (this.shake > 0 && !this.paused) ctx.translate(TD.rand(-1, 1) * this.shake * 8, TD.rand(-1, 1) * this.shake * 8);
+    J.shakeOffset(this, SHK);
+    if (SHK.x || SHK.y) ctx.translate(SHK.x, SHK.y);
     ctx.drawImage(this.bg, 0, 0);
 
     // brillo del agua
@@ -560,6 +583,9 @@
       D.flagPole(ctx, r.x, r.y, 24, D.natFlag(), t, 12, 8, 1);
     }
 
+    // efectos al ras del suelo (caídos, quemaduras, barcos hundiéndose)
+    for (i = 0; i < this.fx.length; i++) if (this.fx[i].ground) D.fx(ctx, this.fx[i]);
+
     // entidades ordenadas por profundidad
     dl.length = 0;
     for (i = 0; i < this.towers.length; i++) { this.towers[i].sy = this.towers[i].y + 6; dl.push(this.towers[i]); }
@@ -595,14 +621,30 @@
     }
 
     for (i = 0; i < this.projs.length; i++) this.projs[i].draw(ctx);
-    for (i = 0; i < this.fx.length; i++) D.fx(ctx, this.fx[i]);
+    for (i = 0; i < this.fx.length; i++) if (!this.fx[i].ground) D.fx(ctx, this.fx[i]);
+    J.drawParts(ctx, this);
+    J.drawNums(ctx, this);
     for (i = 0; i < this.texts.length; i++) {
       var tx = this.texts[i], p = tx.t / tx.dur;
+      var pop = tx.t < 0.14 ? 0.7 + 0.3 * Math.sin(tx.t / 0.14 * Math.PI * 0.5) : 1;
+      ctx.save();
       ctx.globalAlpha = p > 0.7 ? (1 - p) / 0.3 : 1;
-      D.textO(ctx, tx.s, tx.x, tx.y - 26 * p, tx.size, tx.color);
+      ctx.translate(tx.x, tx.y - 22 * (1 - (1 - p) * (1 - p)));
+      ctx.scale(pop, pop);
+      D.textO(ctx, tx.s, 0, 0, tx.size, tx.color);
+      ctx.restore();
     }
     ctx.globalAlpha = 1;
     ctx.restore();
+
+    // borde rojizo muy suave cuando se pierde una vida
+    if (this.hurtT > 0) {
+      var va = Math.min(1, this.hurtT / 0.7) * 0.35;
+      var vg = ctx.createRadialGradient(TD.W / 2, TD.H / 2, TD.H * 0.42, TD.W / 2, TD.H / 2, TD.W * 0.62);
+      vg.addColorStop(0, 'rgba(160,30,20,0)');
+      vg.addColorStop(1, 'rgba(160,30,20,' + va + ')');
+      ctx.fillStyle = vg; ctx.fillRect(0, 0, TD.W, TD.H);
+    }
   };
 
   TD.Game = Game;
