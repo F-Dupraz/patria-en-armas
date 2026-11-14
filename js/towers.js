@@ -94,6 +94,8 @@
     TD.Audio.play('upgrade');
     if (this.level === 3) {
       this.abCd = 2;
+      TD.Logros.bump('maxed');
+      TD.Logros.bit('br', TD.TOWER_KEYS.indexOf(this.key) * 2 + this.branch);
       g.setBanner('¡Habilidad desbloqueada: ' + this.def.ability.name + '!');
     }
     return true;
@@ -436,6 +438,7 @@
       TD.Audio.play('horn');
     }
     this.abCd = this.def.ability.cd;
+    TD.Logros.bump('abil');
     return true;
   };
 

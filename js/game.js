@@ -59,7 +59,7 @@
     this.time = 0; this.speed = 1; this.paused = false;
     this.state = 'prep';            // prep | running | won | lost
     this.waveIdx = 0; this.nextTimer = 0; this.spawners = []; this.waveLeft = [];
-    this.stats = { sold: 0, leaked: 0, heroDeaths: 0, early: 0, built: 0, kills: 0, maxTowers: 0 };
+    this.stats = { sold: 0, leaked: 0, navalLeaked: 0, heroDeaths: 0, early: 0, built: 0, kills: 0, maxTowers: 0 };
     this.sel = null; this.mode = null; this.armed = null;
     this.banner = null; this.endT = 0; this.result = null;
     this.mx = -999; this.my = -999;
@@ -231,6 +231,7 @@
     if (this.waveLeft[wi] === 0) {
       var bonus = this.lvl.waves[wi].bonus;
       this.gold += bonus;
+      TD.Logros.bump('gold', bonus);
       if (this.state === 'running') {
         this.setBanner('Oleada ' + (wi + 1) + ' superada: +' + bonus + ' de oro');
         if (wi + 1 < this.lvl.waves.length) TD.Audio.play('waveclear');
@@ -244,6 +245,7 @@
     J.coin(this, e.x, e.y - e.h * 0.6, gold);
     J.flushDmg(this, e);
     this.stats.kills++;
+    TD.Logros.onKill(e, !!o.hero);
     this.hero.addXp(o.hero ? gold : gold * 0.2);
     if (e.def.naval) {
       this.addFx({ k: 'boom', x: e.x, y: e.y - 8, r: e.r * 1.4, dur: 0.6, fire: true });
@@ -275,6 +277,7 @@
     this.lives -= e.def.lives;
     if (this.lives < 0) this.lives = 0;
     this.stats.leaked++;
+    if (e.def.naval) this.stats.navalLeaked++;
     this.kick(0.35);
     this.lifeFlash = 0.6;
     this.hurtT = 0.7;
@@ -304,7 +307,8 @@
       var bonus = this.earlyBonus();
       if (bonus > 0) {
         this.gold += bonus;
-        if (this.nextTimer >= 5) this.stats.early++;      // cuenta como "adelantada" si faltaban 5 s o más
+        TD.Logros.bump('gold', bonus);
+        if (this.nextTimer >= 5) { this.stats.early++; TD.Logros.bump('early'); }      // cuenta como "adelantada" si faltaban 5 s o más
         this.addText(TD.W - 180, TD.BAR_Y - 20, 'Oleada adelantada: +' + bonus + ' de oro', '#ffd76a', 15);
       }
     }
@@ -338,6 +342,7 @@
     slot.tower = tw;
     this.towers.push(tw);
     this.stats.built++;
+    TD.Logros.bump('built');
     if (this.towers.length > this.stats.maxTowers) this.stats.maxTowers = this.towers.length;
     this.addFx({ k: 'dust', x: slot.x, y: slot.y + 4, r: 34, dur: 0.6, seed: slot.x });
     this.addFx({ k: 'ring', x: slot.x, y: slot.y, r: 40, color: D.BLANCO, dur: 0.4 });
@@ -464,6 +469,7 @@
     if (!win) {
       this.state = 'lost';
       this.result = { win: false, stars: 0, met: [] };
+      TD.Logros.flush();
       TD.Audio.play('lose');
       return;
     }
@@ -477,8 +483,13 @@
     var key = String(this.idx);
     if (S.medal(this.idx) < this.minDiff) S.data.medals[key] = this.minDiff;
     if (!(S.data.stars[key] >= stars)) S.data.stars[key] = stars;
+    // estrellas por dificultad (la más baja usada en la batalla), para las condecoraciones de oro
+    var sd = S.data.starsD[key];
+    if (!sd || typeof sd !== 'object' || sd.length !== 3) sd = S.data.starsD[key] = [0, 0, 0];
+    if (!(sd[this.minDiff] >= stars)) sd[this.minDiff] = stars;
     if (S.data.unlocked < this.idx + 2) S.data.unlocked = Math.min(TD.LEVELS.length, this.idx + 2);
     S.save();
+    TD.Logros.onWin(this);
     TD.Audio.play('win');
   };
 

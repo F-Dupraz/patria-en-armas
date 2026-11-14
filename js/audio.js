@@ -257,7 +257,15 @@
         timpani(A.sfx, t0 + d[i], 0.45);
       }
     },
-    disabled: function () { noise(0.3, 0.4, 600, 'lowpass', 0, 120); tone(140, 0.25, 'square', 0.15, 70); }
+    disabled: function () { noise(0.3, 0.4, 600, 'lowpass', 0, 120); tone(140, 0.25, 'square', 0.15, 70); },
+    // Condecoración: toque corto de corneta con brillo
+    medal: function () {
+      var t0 = A.ctx.currentTime;
+      bugle([[523, 0.09, 0.0], [659, 0.09, 0.1], [784, 0.09, 0.2], [1047, 0.36, 0.3]], 0.12, 3000);
+      tone(2093, 0.28, 'sine', 0.07, 0, 0.32);
+      noise(0.22, 0.1, 6500, 'highpass', 0.3);
+      timpani(A.sfx, t0 + 0.3, 0.32);
+    }
   };
 
   A.play = function (name, arg) {

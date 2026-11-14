@@ -114,7 +114,7 @@
   var KEY = 'patria_en_armas_v1';
 
   function defaults() {
-    return { unlocked: 1, stars: {}, hero: null, sound: true, music: true, sfxVol: 1, musicVol: 1, tutorialDone: false, shake: true, nums: true, diff: 'normal', medals: {} };
+    return { unlocked: 1, stars: {}, hero: null, sound: true, music: true, sfxVol: 1, musicVol: 1, tutorialDone: false, shake: true, nums: true, diff: 'normal', medals: {}, starsD: {}, ach: {}, stat: {} };
   }
 
   TD.Save = {
@@ -138,6 +138,9 @@
         if (typeof o.nums === 'boolean') d.nums = o.nums;
         if (o.diff === 'facil' || o.diff === 'normal' || o.diff === 'dificil') d.diff = o.diff;
         if (o.medals && typeof o.medals === 'object') d.medals = o.medals;
+        if (o.starsD && typeof o.starsD === 'object') d.starsD = o.starsD;
+        if (o.ach && typeof o.ach === 'object') d.ach = o.ach;       // condecoraciones ganadas (ver logros.js)
+        if (o.stat && typeof o.stat === 'object') d.stat = o.stat;   // contadores acumulados entre batallas
         this.data = d;
       } catch (e) { /* sin almacenamiento: se juega igual, sin guardar */ }
     },
@@ -156,6 +159,14 @@
       var k = String(idx), m = this.data.medals[k];
       if (typeof m === 'number' && m >= 0 && m <= 2) return m | 0;
       return this.data.stars[k] != null ? 0 : -1;
+    },
+    // Mejor cantidad de estrellas de un nivel ganándolo en la dificultad d o en una mayor.
+    // Las estrellas anteriores a este registro cuentan solo para «fácil».
+    starsAt: function (idx, d) {
+      var k = String(idx), a = this.data.starsD[k], n = 0, i;
+      if (a && typeof a === 'object') for (i = d; i < 3; i++) if (a[i] > n && a[i] <= 3) n = a[i] | 0;
+      if (d <= 0) n = Math.max(n, this.data.stars[k] | 0);
+      return n;
     },
     totalStars: function () {
       var n = 0, k;
