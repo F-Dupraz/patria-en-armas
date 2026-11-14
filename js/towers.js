@@ -15,18 +15,22 @@
     this.invested = this.def.cost;
     this.st = TD.merge(this.def.base);
     this.cd = 0.4; this.aim = -0.5; this.face = 1; this.recoil = 0; this.anim = Math.random() * 5; this.shots = 0;
+    // seguimiento del blanco y estado de los que atienden la torre (para animarlos)
+    this.tgt = null; this.scanT = 0; this.since = 9; this.lastRate = 1; this.aimL = 0.3; this.aimU = 0; this.reload = -1;
     this.maxHp = 140; this.hp = 140; this.disT = 0; this.buffT = 0; this.abCd = 0;
     this.soldiers = [];
     this.rally = null;
     // punto del camino terrestre más cercano (para reunión, montonera, etc.)
-    var best = null, i, n;
+    var best = null, bestP = null, i, n;
     for (i = 0; i < g.paths.length; i++) {
       if (g.paths[i].naval) continue;
       n = g.paths[i].nearest(this.x, this.y);
-      if (!best || n.dist < best.dist) best = n;
+      if (!best || n.dist < best.dist) { best = n; bestP = g.paths[i]; }
     }
     this.near = best || { x: this.x, y: this.y + 40, dist: 40, d: 0 };
     if (this.near.x < this.x) this.face = -1;
+    // los soldados, en reposo, miran hacia donde llegan los enemigos
+    var idleA = bestP ? bestP.at(this.near.d, {}).ang + Math.PI : null;
     if (key === 'granaderos') {
       this.sst = { hp: 0, dmg: 0, rate: 1, armor: 0, type: 'cont' };
       this.syncSoldierStats();
@@ -34,6 +38,7 @@
       for (i = 0; i < 3; i++) {
         var s = new TD.Soldier(g, this, this.x, this.y + 8, this.sst, TD.LOOKS.granadero);
         s.hx = this.rally.x + FORMATION[i][0]; s.hy = this.rally.y + FORMATION[i][1];
+        s.idleA = idleA;
         this.soldiers.push(s);
         g.soldiers.push(s);
       }
@@ -174,6 +179,7 @@
       return;
     }
     if (this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + 4 * dt);
+    if (this.key !== 'granaderos') this.track(dt);
 
     if (this.key === 'granaderos') {
       for (i = 0; i < this.soldiers.length; i++) {
@@ -208,15 +214,68 @@
     }
   };
 
-  Tower.prototype.muzzle = function () {
-    var H = 44 + (this.branch === 0 ? this.level * 3 : 0);
-    return { x: this.x + this.face * 12, y: this.y - H - 18 };
+  // Sigue al blanco con la mirada / el caño entre disparo y disparo y decide la pose
+  Tower.prototype.track = function (dt) {
+    var e = this.tgt, k = this.key;
+    this.since += dt;
+    if (e && (e.dead || e.gone || e.invis > 0 || TD.dist(this.x, this.y - 8, e.x, e.y) > this.st.range + 40)) e = this.tgt = null;
+    if (!e) {
+      this.scanT -= dt;
+      if (this.scanT <= 0) {
+        this.scanT = 0.25;
+        var l = this.pickTargets(1, this.st.range + 25, k === 'gauchos', false);
+        if (l.length) e = this.tgt = l[0];
+      }
+    }
+    var reloading = false;
+    if (k === 'tiradores') {
+      var R = this.lastRate;
+      reloading = R > 0.75 && this.since > 0.3 && this.since < R - 0.38;
+      this.reload = reloading ? (((this.since - 0.3) / Math.max(0.2, R - 0.68)) * 2) % 1 : -1;
+      if (e) {
+        this.face = e.x >= this.x ? 1 : -1;
+        var H = 44 + (this.branch === 0 ? this.level * 3 : 0);
+        var want = Math.atan2(e.cy() - (this.y - H - 18), Math.abs(e.x - this.x) + 1);
+        this.aimL += (want - this.aimL) * Math.min(1, dt * 8);
+      }
+      var up = e && !reloading ? 1 : 0;
+      this.aimU += (up - this.aimU) * Math.min(1, dt * (up ? 9 : 6));
+    } else if (k === 'artilleria') {
+      var R2 = this.lastRate;
+      this.reload = R2 > 1.2 && this.since > 0.45 && this.since < R2 - 0.8 ? ((this.since - 0.45) / (R2 - 1.25) * 2) % 1 : -1;
+      if (e && this.since > 0.3) {
+        var wa = Math.atan2(e.y - 14 - (this.y - 20), e.x - this.x);
+        var da = wa - this.aim;
+        while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
+        this.aim += TD.clamp(da, -dt * 3, dt * 3);
+      }
+    } else if (e) {
+      this.face = e.x >= this.x ? 1 : -1;
+    }
+  };
+
+  Tower.prototype.nShooters = function () {
+    var b = this.branch, L = this.level;
+    return b === 1 ? (L >= 3 ? 3 : (L >= 1 ? 2 : 1)) : 1;
+  };
+
+  // Boca del fusil del tirador i, según hacia dónde apunta
+  Tower.prototype.muzzle = function (i) {
+    var H = 44 + (this.branch === 0 ? this.level * 3 : 0), n = this.nShooters();
+    var sx = ((i == null ? 0 : i % n) - (n - 1) / 2) * 11, a = this.aimL, S = 0.82;
+    return {
+      x: this.x + sx + this.face * (-1.8 + Math.cos(a) * 21) * S,
+      y: this.y - H - 3 + (-18.6 + Math.sin(a) * 21) * S
+    };
   };
 
   Tower.prototype.fireMusket = function (e) {
     var g = this.g, st = this.st, self = this;
     this.face = e.x >= this.x ? 1 : -1;
-    var m = this.muzzle();
+    var H = 44 + (this.branch === 0 ? this.level * 3 : 0);
+    this.aimL = Math.atan2(e.cy() - (this.y - H - 18), Math.abs(e.x - this.x) + 1);
+    this.aimU = 1; this.tgt = e; this.since = 0; this.lastRate = st.rate * (this.buffT > 0 ? 0.7 : 1);
+    var m = this.muzzle(this.shots);
     var crit = st.crit > 0 && Math.random() < st.crit;
     var dmg = st.dmg * (crit ? st.critMult : 1);
     this.recoil = 1; this.shots++;
@@ -237,6 +296,7 @@
     this.aim = Math.atan2(p.y - 14 - sy, p.x - sx);
     this.face = p.x >= sx ? 1 : -1;
     this.recoil = 1; this.shots++;
+    this.tgt = e; this.since = 0; this.lastRate = st.rate * (this.buffT > 0 ? 0.7 : 1);
     var mx = sx + Math.cos(this.aim) * 24, my = sy + Math.sin(this.aim) * 24;
     g.addFx({ k: 'flash', x: mx, y: my, ang: this.aim, dur: 0.12, s: 1.8 });
     g.addFx({ k: 'smoke', x: mx, y: my, dur: 0.8, r: 6, grow: 12, rise: 14 });
@@ -252,7 +312,8 @@
     var g = this.g, st = this.st;
     this.face = e.x >= this.x ? 1 : -1;
     this.recoil = 1; this.shots++;
-    g.projs.push(new TD.Proj(g, 'bola', this.x + 25, this.y - 22, e, e.x, e.cy(), {
+    this.tgt = e; this.since = 0;
+    g.projs.push(new TD.Proj(g, 'bola', this.x + 25 + this.face * 6, this.y - 20, e, e.x, e.cy(), {
       onHit: function (t, x, y) {
         if (!t) return;
         t.damage(st.dmg, st.type, {});
@@ -275,6 +336,7 @@
     var g = this.g, st = this.st, self = this;
     this.face = e.x >= this.x ? 1 : -1;
     this.recoil = 1; this.shots++;
+    this.tgt = e; this.since = 0;
     // el gaucho aparece detrás del enemigo (opuesto a su dirección de marcha)
     var bx = e.x - Math.cos(e.ang) * 26, by = e.y - Math.sin(e.ang) * 26 + 2;
     g.addFx({
@@ -340,6 +402,7 @@
       if (!tg.length) { g.addText(this.x, this.y - 90, 'Sin blancos a tiro', '#f0d8c8', 13); return false; }
       e = tg[0];
       this.face = e.x >= this.x ? 1 : -1;
+      this.aimL = Math.atan2(e.cy() - this.muzzle().y, Math.abs(e.x - this.x) + 1); this.aimU = 1; this.since = 0; this.tgt = e;
       var m = this.muzzle(), ang = Math.atan2(e.cy() - m.y, e.x - m.x);
       var ex = m.x + Math.cos(ang) * 720, ey = m.y + Math.sin(ang) * 720;
       var dx = Math.cos(ang), dy = Math.sin(ang);

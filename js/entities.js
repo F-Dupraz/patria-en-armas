@@ -9,6 +9,28 @@
   var TMP = {};
   var J = TD.Juice;
 
+  /* Orientación: cada unidad tiene un ángulo de mirada (dirA) que gira de a poco
+   * hacia el deseado. De ahí salen la vista (perfil / frente / espaldas), el lado
+   * (face) y un leve "afinamiento" (fw) mientras gira, que se lee como un giro. */
+  function angWrap(a) { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; }
+  function steer(u, want, side, dt) {
+    var d = angWrap(want - u.dirA);
+    // media vuelta: gira pasando por el frente (mirando a cámara), como un muñeco de verdad
+    if (Math.abs(d) > 2.9) d = (angWrap(Math.PI / 2 - u.dirA) >= 0 ? 1 : -1) * Math.abs(d);
+    var mx = 11 * dt, st = d > mx ? mx : (d < -mx ? -mx : d);
+    u.dirA = angWrap(u.dirA + st);
+    var rate = dt > 0 ? Math.abs(st) / dt : 0;
+    var fwT = 1 - 0.42 * Math.min(1, rate / 8);
+    u.fw += (fwT - u.fw) * Math.min(1, dt * 18);
+    var cx = Math.cos(u.dirA), cy = Math.sin(u.dirA);
+    if (side) u.view = 0;
+    else if (u.view === 0) { if (Math.abs(cy) > 0.8) u.view = cy > 0 ? 1 : -1; }
+    else if (Math.abs(cy) < 0.64) u.view = 0;
+    else u.view = cy > 0 ? 1 : -1;
+    if (cx > 0.08) u.face = 1; else if (cx < -0.08) u.face = -1;
+  }
+  TD.steer = steer;
+
   /* =========================== ENEMIGO =========================== */
   function Enemy(g, type, pi, wi, d0) {
     var def = TD.ENEMIES[type], k;
@@ -22,12 +44,14 @@
     this.spdMul = 1;
     this.slowF = 0; this.slowT = 0; this.stunT = 0; this.burnT = 0; this.burnDps = 0;
     this.blocker = null;
-    this.atkT = TD.rand(0, 0.5); this.rangedT = TD.rand(0.6, 1.6); this.rangedHold = 0;
+    this.atkT = TD.rand(0, 0.5); this.rangedT = TD.rand(0.6, 1.6);
     this.invis = 0; this.invisCd = 4; this.healT = 2.5; this.sinceHit = 99; this.effT = 0;
     this.phase = 1; this.towerT = 2;
     this.dead = false; this.gone = false; this.moving = true;
     this.anim = Math.random() * 10; this.atkAnim = 0; this.hitFlash = 0;
     this.x = 0; this.y = 0; this.ang = 0; this.face = 1;
+    this.dirA = null; this.view = 0; this.fw = 1; this.hurtT = 0;
+    this.aimA = 0; this.aimU = 0; this.shot = null; this.lookX = 0; this.wind = 0; this.ready = false;
     // copia del aspecto con campos dinámicos (evita crear objetos por cuadro)
     this.o = {};
     for (k in def.look) if (Object.prototype.hasOwnProperty.call(def.look, k)) this.o[k] = def.look[k];
@@ -43,7 +67,23 @@
     var c = Math.cos(p.ang), s = Math.sin(p.ang);
     this.x = p.x - s * this.off;
     this.y = p.y + c * this.off;
-    if (c > 0.15) this.face = 1; else if (c < -0.15) this.face = -1;
+    if (this.dirA == null) this.dirA = p.ang;
+    if (this.def.naval || this.dirA === p.ang) { if (c > 0.15) this.face = 1; else if (c < -0.15) this.face = -1; }
+  };
+
+  // Boca del arma según la pose (fusil apuntando o pistola del jefe)
+  Enemy.prototype.muzzle = function (out) {
+    var s = this.o.s || 1, a = this.aimA, cav = this.o.kind === 'cav';
+    var bx = cav ? -1.6 : -1.8, by = cav ? -32.3 : -18.6, L = this.def.boss ? 15 : 21;
+    out.x = this.x + this.face * (bx + Math.cos(a) * L) * s;
+    out.y = this.y + (by + Math.sin(a) * L) * s;
+    return out;
+  };
+
+  // Elevación del arma hacia un punto (en el espacio de perfil de la figura)
+  Enemy.prototype.aimAt = function (tx, ty) {
+    var sy = this.cy() - 2;
+    this.aimA = Math.atan2(ty - sy, Math.abs(tx - this.x) + 1);
   };
 
   // Centro aproximado del cuerpo (para apuntar)
@@ -72,6 +112,7 @@
     this.hp -= dealt;
     this.sinceHit = 0;
     this.hitFlash = 0.1;
+    if (!o.aoe || this.hurtT <= 0) this.hurtT = 0.2;
     // la eficacia se ve en las chispas y el número, sin carteles de texto
     if (!o.aoe && !(o.quiet && Math.random() < 0.5)) J.hit(this.g, this, m, o.crit, type);
     J.addDmg(this.g, this, dealt, m, o.crit);
@@ -123,7 +164,10 @@
       if (this.towerT <= 0) {
         this.towerT = def.naval ? 1.8 : 2.4;
         var tw = g.nearestTower(this.x, this.y, 290);
-        if (tw) { g.enemyShootTower(this, tw, def.boss.towerDmg); this.atkAnim = 1; }
+        if (tw) {
+          if (def.naval) { g.enemyShootTower(this, tw, def.boss.towerDmg); this.atkAnim = 1; }
+          else if (!this.shot) this.shot = { tgt: tw, soldier: false, ph: 0, t: 0.4, dmg: def.boss.towerDmg };
+        }
       }
     }
   };
@@ -170,13 +214,33 @@
     }
   };
 
+  // Disparo en curso: se frena, gira hacia el blanco, apunta, dispara y baja el arma.
+  Enemy.prototype.shotLogic = function (dt) {
+    var g = this.g, sh = this.shot, tg = sh.tgt;
+    sh.t -= dt;
+    if (sh.ph === 0) {
+      if (sh.soldier ? (tg.dead || tg.gone) : tg.disT > 0) { this.shot = null; this.rangedT = Math.min(this.rangedT, 0.25); return; }
+      this.lookX = tg.x;
+      this.aimAt(tg.x, sh.soldier ? tg.y - 14 : tg.y - 28);
+      if (sh.t <= 0) {
+        if (sh.soldier) g.enemyShootSoldier(this, tg, sh.dmg); else g.enemyShootTower(this, tg, sh.dmg);
+        this.atkAnim = 1; sh.ph = 1; sh.t = 0.22;
+      }
+    } else if (sh.t <= 0) this.shot = null;
+  };
+
   // Enemigos con ataque a distancia: priorizan soldados, luego torres.
   Enemy.prototype.rangedLogic = function (dt) {
     var g = this.g, r = this.def.ranged, i, s, d;
-    if (this.rangedHold > 0) this.rangedHold -= dt;
     this.rangedT -= dt;
-    if (this.rangedT > 0) return;
-    if (!this.def.naval && r.dmg) {
+    if (this.shot || this.rangedT > 0) return;
+    if (this.def.naval) {
+      var tn = g.nearestTower(this.x, this.y, r.range);
+      if (tn) { this.rangedT = r.rate; this.atkAnim = 1; g.enemyShootTower(this, tn, r.towerDmg); }
+      else this.rangedT = 0.35;
+      return;
+    }
+    if (r.dmg) {
       var tgt = null, best = r.range;
       for (i = 0; i < g.soldiers.length; i++) {
         s = g.soldiers[i];
@@ -185,16 +249,15 @@
         if (d < best) { best = d; tgt = s; }
       }
       if (tgt) {
-        this.rangedT = r.rate; this.rangedHold = 0.8; this.atkAnim = 1;
-        this.face = tgt.x >= this.x ? 1 : -1;
-        g.enemyShootSoldier(this, tgt, r.dmg);
+        this.rangedT = r.rate;
+        this.shot = { tgt: tgt, soldier: true, ph: 0, t: 0.34, dmg: r.dmg };
         return;
       }
     }
     var tw = g.nearestTower(this.x, this.y, r.range);
     if (tw) {
-      this.rangedT = r.rate; this.atkAnim = 1;
-      g.enemyShootTower(this, tw, r.towerDmg);
+      this.rangedT = r.rate;
+      this.shot = { tgt: tw, soldier: false, ph: 0, t: 0.34, dmg: r.towerDmg };
       return;
     }
     this.rangedT = 0.35;
@@ -203,6 +266,7 @@
   Enemy.prototype.update = function (dt) {
     var g = this.g, def = this.def;
     this.anim += dt; this.sinceHit += dt; this.effT -= dt; this.hitFlash -= dt;
+    if (this.hurtT > 0) this.hurtT -= dt;
     J.tickDmg(g, this, dt);
     if (this.atkAnim > 0) this.atkAnim = Math.max(0, this.atkAnim - dt * 3.5);
     if (this.burnT > 0) {
@@ -215,37 +279,51 @@
     if (def.boss) this.bossLogic(dt);
     if (def.elite) this.eliteLogic(dt);
     if (this.dead) return;
-    if (this.stunT > 0) { this.stunT -= dt; this.moving = false; return; }
-    if (def.ranged) this.rangedLogic(dt);
+    this.wind = 0; this.ready = false;
+    if (this.stunT > 0) { this.stunT -= dt; this.moving = false; this.shot = null; return; }
 
-    var b = this.blocker;
+    var b = this.blocker, held = false, contact = false;
+    if (b && (b.dead || b.target !== this)) this.blocker = b = null;
     if (b) {
-      if (b.dead || b.target !== this) {
-        this.blocker = b = null;
-      } else {
-        var dd = TD.dist(this.x, this.y, b.x, b.y);
-        if (dd < 66) {
-          this.moving = false;
-          if (dd < this.r + 24) {
-            this.face = b.x >= this.x ? 1 : -1;
-            this.atkT -= dt;
-            if (this.atkT <= 0) {
-              this.atkT = def.rate || 1;
-              this.atkAnim = 1;
-              b.hurt(def.dmg || 5, this);
-            }
-          }
-          return;
-        }
-      }
+      var dd = TD.dist(this.x, this.y, b.x, b.y);
+      if (dd < 66) { held = true; contact = dd < this.r + 24; }
     }
-    var v = def.spd * this.spdMul * (1 - this.slowF);
-    if (this.rangedHold > 0 && !def.naval) v *= 0.5;
-    if (def.naval && g.lvl.chainX && Math.abs(this.x - g.lvl.chainX) < 34) v *= 0.3;     // las cadenas frenan a los barcos
-    this.d += v * dt;
-    this.moving = true;
-    this.updatePos();
-    if (this.d >= this.path.length) g.enemyReached(this);
+    // a quemarropa pelea con la bayoneta; si no, dispara
+    if (contact && !def.naval && !def.boss) this.shot = null;
+    else if (def.ranged) this.rangedLogic(dt);
+    if (this.shot) this.shotLogic(dt);
+
+    var want = this.ang, side = false;
+    if (held) {
+      this.moving = false;
+      if (contact) {
+        side = true; want = b.x >= this.x ? 0 : Math.PI;
+        this.ready = true;
+        this.atkT -= dt;
+        this.wind = TD.clamp(1 - this.atkT / 0.3, 0, 1);
+        if (this.atkT <= 0) {
+          this.atkT = def.rate || 1;
+          this.atkAnim = 1; this.wind = 0;
+          b.hurt(def.dmg || 5, this);
+        }
+      } else want = Math.atan2(b.y - this.y, b.x - this.x);
+    } else if (this.shot) {
+      this.moving = false;
+      side = true; want = this.lookX >= this.x ? 0 : Math.PI;
+    } else {
+      var v = def.spd * this.spdMul * (1 - this.slowF);
+      if (def.naval && g.lvl.chainX && Math.abs(this.x - g.lvl.chainX) < 34) v *= 0.3;     // las cadenas frenan a los barcos
+      this.d += v * dt;
+      this.moving = true;
+      this.updatePos();
+      want = this.ang;
+    }
+    if (!def.naval) {
+      steer(this, want, side, dt);
+      var up = this.shot ? 1 : 0;
+      this.aimU += (up - this.aimU) * Math.min(1, dt * (up ? 9 : 6));
+    }
+    if (this.moving && this.d >= this.path.length) g.enemyReached(this);
   };
 
   function drawShip(c, e) { D.ship(c, e.x, e.y, e.o); }
@@ -256,6 +334,14 @@
     var fl = this.hitFlash > 0 && this.invis <= 0 ? this.hitFlash / 0.1 : 0;
     o.face = this.face; o.t = t; o.walk = this.moving; o.atk = this.atkAnim;
     o.alpha = this.invis > 0 ? 0.28 : 1;
+    if (!def.naval) {
+      o.view = this.view; o.fw = this.fw; o.ready = this.ready; o.wind = this.wind;
+      o.hurt = this.hurtT > 0 ? this.hurtT / 0.2 : 0;
+      o.spd = 0.6 + def.spd / 90;
+      o.aimA = this.aimA;
+      if (def.boss) { o.pistol = this.aimU; o.aimUp = 0; } else o.aimUp = this.aimU;
+      o.dizzy = this.stunT > 0;
+    }
     o.sq = def.naval ? 0 : fl * 0.1;
     if (def.boss && !def.naval) {
       ctx.strokeStyle = 'rgba(207,43,43,' + (0.5 + Math.sin(t * 5) * 0.2) + ')'; ctx.lineWidth = 3;
@@ -310,6 +396,8 @@
     this.fo = TD.rand(-7, 7);
     this.spd = st.spd || 105; this.engage = st.engage || 62;
     this.r = 8; this.isHero = false; this.gone = false; this.hitFlash = 0;
+    this.dirA = 0; this.view = 0; this.fw = 1; this.hurtT = 0; this.wind = 0; this.ready = false;
+    this.mvA = 0; this.idleA = null; this.eTgt = null; this.eSide = 1;
     this.o = {};
     for (k in look) if (Object.prototype.hasOwnProperty.call(look, k)) this.o[k] = look[k];
     this.h = (this.o.kind === 'cav' ? 44 : 38) * (this.o.s || 1);
@@ -347,7 +435,7 @@
     var step = this.spd * dt;
     if (step >= d) { this.x = tx; this.y = ty; this.moving = false; return true; }
     this.x += dx / d * step; this.y += dy / d * step;
-    if (Math.abs(dx) > 1) this.face = dx > 0 ? 1 : -1;
+    this.mvA = Math.atan2(dy, dx);
     this.moving = true;
     return false;
   };
@@ -357,6 +445,7 @@
     this.hp -= dmg * (1 - (this.st.armor || 0));
     this.idleT = 0;
     this.hitFlash = 0.08;
+    this.hurtT = 0.18;
     if (this.hp <= 0) this.die();
   };
 
@@ -372,17 +461,35 @@
     this.dead = false; this.hp = this.maxHp; this.x = x; this.y = y; this.target = null; this.stunT = 0; this.idleT = 0;
   };
 
+  // Hacia dónde mira cuando está quieto: al enemigo más cercano o hacia donde vienen.
+  Soldier.prototype.idleLook = function () {
+    var g = this.g, i, e, best = null, bd = this.engage + 90, d;
+    for (i = 0; i < g.enemies.length; i++) {
+      e = g.enemies[i];
+      if (e.dead || e.gone || e.def.naval || e.invis > 0) continue;
+      d = TD.dist(this.x, this.y, e.x, e.y);
+      if (d < bd) { bd = d; best = e; }
+    }
+    if (best) { this.lookSide = true; return best.x >= this.x ? 0 : Math.PI; }
+    if (this.idleA != null) { this.lookSide = false; return this.idleA; }
+    this.lookSide = true;
+    return this.face > 0 ? 0 : Math.PI;
+  };
+
   Soldier.prototype.update = function (dt) {
     if (this.dead) return;
     this.anim += dt;
     if (this.hitFlash > 0) this.hitFlash -= dt;
+    if (this.hurtT > 0) this.hurtT -= dt;
     if (this.atkAnim > 0) this.atkAnim = Math.max(0, this.atkAnim - dt * 3.5);
+    this.wind = 0; this.ready = false;
     if (this.temp) {
       this.life -= dt;
       if (this.life <= 0) { this.dead = true; this.gone = true; this.release(); this.g.addFx({ k: 'puff', x: this.x, y: this.y, dur: 0.5, seed: this.anim }); return; }
     }
     if (this.stunT > 0) { this.stunT -= dt; this.moving = false; return; }
 
+    var want = this.dirA, side = false;
     var e = this.target;
     if (e && (e.dead || e.gone || e.invis > 0 || TD.dist(this.hx, this.hy, e.x, e.y) > this.engage + 55)) {
       this.release(); e = null;
@@ -393,27 +500,38 @@
     }
     if (e) {
       this.idleT = 0;
-      var front = e.blocker === this;
-      var tx = front ? e.x + Math.cos(e.ang) * (e.r + 9) : e.x - Math.cos(e.ang) * 4 + this.fo * 1.6;
-      var ty = front ? e.y + Math.sin(e.ang) * (e.r + 9) + this.fo * 0.3 : e.y + (this.fo > 0 ? 1 : -1) * (e.r + 7);
+      // se planta al costado del enemigo, cara a cara (el de adelante) o flanqueando
+      if (this.eTgt !== e) { this.eTgt = e; this.eSide = this.x >= e.x ? 1 : -1; }
+      var sd = this.eSide, tx, ty;
+      if (e.blocker === this) { tx = e.x + sd * (e.r + 10); ty = e.y + 1; }
+      else {
+        var fb = e.blocker, fs = fb && fb.eTgt === e ? fb.eSide : -sd;
+        if (fs === sd) { tx = e.x + sd * (e.r + 6); ty = e.y + (this.fo > 0 ? 1 : -1) * (e.r * 0.5 + 6); }
+        else { tx = e.x + sd * (e.r + 10); ty = e.y + this.fo * 0.4; }
+      }
       var arrived = this.moveTo(tx, ty, dt);
       if (arrived || TD.dist(this.x, this.y, e.x, e.y) < e.r + 16) {
-        this.face = e.x >= this.x ? 1 : -1;
+        side = true; want = e.x >= this.x ? 0 : Math.PI;
+        this.ready = true;
         this.atkT -= dt;
+        this.wind = TD.clamp(1 - this.atkT / 0.3, 0, 1);
         if (this.atkT <= 0) {
           this.atkT = this.st.rate;
-          this.atkAnim = 1;
+          this.atkAnim = 1; this.wind = 0;
           e.damage(this.st.dmg, this.st.type || 'cont', { hero: this.isHero, quiet: !this.isHero && Math.random() < 0.6 });
           if (this.isHero) { TD.Audio.play('slash'); this.g.addFx({ k: 'slash', x: e.x, y: e.cy(), r: 13, ang: this.face > 0 ? 0 : Math.PI, dur: 0.22 }); }
         }
-      }
+      } else want = this.mvA;
     } else {
+      this.eTgt = null;
       var home = this.moveTo(this.hx, this.hy, dt);
       if (home) {
         this.idleT += dt;
         if (this.idleT > 2 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.07 * dt);
-      }
+        want = this.idleLook(); side = this.lookSide;
+      } else want = this.mvA;
     }
+    steer(this, want, side, dt);
     if (this.st.regen && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + this.st.regen * dt);
   };
 
@@ -422,6 +540,10 @@
     var o = this.o, i;
     o.face = this.face; o.t = this.anim; o.walk = this.moving; o.atk = this.atkAnim;
     o.alpha = this.temp && this.life < 1 ? Math.max(0.2, this.life) : 1;
+    o.view = this.view; o.fw = this.fw; o.ready = this.ready; o.wind = this.wind;
+    o.hurt = this.hurtT > 0 ? this.hurtT / 0.18 : 0;
+    o.spd = 0.6 + this.spd / 140;
+    o.dizzy = this.stunT > 0;
     var fl = this.hitFlash > 0 ? this.hitFlash / 0.08 : 0;
     o.sq = fl * 0.08;
     D.shadow(ctx, this.x, this.y + 1, this.isHero ? 13 : 8, this.isHero ? 5 : 3.5);

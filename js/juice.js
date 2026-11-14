@@ -194,6 +194,7 @@
     var c = {}, k;
     for (k in o) if (Object.prototype.hasOwnProperty.call(o, k)) c[k] = o[k];
     c.walk = false; c.atk = 0; c.alpha = 1; c.sq = 0;
+    c.view = 0; c.fw = 1; c.ready = false; c.wind = 0; c.hurt = 0; c.aimUp = 0; c.reload = -1; c.pistol = 0; c.dizzy = false;
     return c;
   }
 
