@@ -1015,6 +1015,72 @@
     ctx.restore();
   };
 
+  /* ---------------- Dificultad: uno, dos o tres sables corvos ---------------- */
+  // Sable con la punta hacia arriba, centrado en el origen (unos 42 px de alto).
+  function sabre(ctx) {
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    // hoja curva
+    ctx.beginPath();
+    ctx.moveTo(-2.6, 5);
+    ctx.quadraticCurveTo(-5.5, -11, 5, -24);
+    ctx.quadraticCurveTo(2.2, -9, 2.6, 5);
+    ctx.closePath();
+    ctx.fillStyle = '#e6e9ee'; ctx.fill();
+    ctx.strokeStyle = D.INK; ctx.lineWidth = 1.6; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 1.1;
+    ctx.beginPath(); ctx.moveTo(-0.9, 2); ctx.quadraticCurveTo(-2.6, -9, 2, -18); ctx.stroke();
+    // empuñadura
+    ctx.strokeStyle = D.INK; ctx.lineWidth = 5.4;
+    ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(0, 15.5); ctx.stroke();
+    ctx.strokeStyle = '#6b4423'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(0, 15.5); ctx.stroke();
+    // gavilán y guardamano dorados (del lado del filo)
+    function guard() {
+      ctx.beginPath(); ctx.moveTo(-6, 6.5); ctx.lineTo(6, 6.5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-5.6, 7); ctx.quadraticCurveTo(-8.5, 14, -1, 17.6); ctx.stroke();
+    }
+    ctx.strokeStyle = D.INK; ctx.lineWidth = 4.8; guard();
+    ctx.strokeStyle = D.GOLD; ctx.lineWidth = 2.6; guard();
+    ctx.fillStyle = D.GOLD; ctx.strokeStyle = D.INK; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(0, 17.8, 2.5, 0, TAU); ctx.fill(); ctx.stroke();
+  }
+
+  function sabreAt(ctx, rot, flip) {
+    ctx.save();
+    ctx.rotate(rot);
+    if (flip) ctx.scale(-1, 1);
+    ctx.translate(0, 3);
+    sabre(ctx);
+    ctx.restore();
+  }
+
+  // Emblema de la dificultad: fácil un sable, normal dos cruzados, difícil tres.
+  // plain: sin el medallón de fondo (para botones chicos).
+  D.diffIcon = function (ctx, key, x, y, s, plain, wob) {
+    var d = window.TD.DIFFS[key], n = window.TD.DIFF_KEYS.indexOf(key) + 1;
+    if (!d) return;
+    ctx.save();
+    ctx.translate(x, y); ctx.scale(s, s);
+    if (!plain) {
+      ctx.fillStyle = 'rgba(30,20,10,0.25)';
+      ctx.beginPath(); ctx.arc(1.5, 2.5, 27, 0, TAU); ctx.fill();
+      ctx.fillStyle = d.color;
+      ctx.beginPath(); ctx.arc(0, 0, 27, 0, TAU); ctx.fill();
+      ctx.strokeStyle = D.INK; ctx.lineWidth = 2.2; ctx.stroke();
+      ctx.strokeStyle = 'rgba(246,242,228,0.75)'; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(0, 0, 22.5, 0, TAU); ctx.stroke();
+    }
+    if (wob) ctx.rotate(wob);
+    ctx.scale(1.12, 1.12);
+    if (n === 1) sabreAt(ctx, 0.55, false);
+    else {
+      sabreAt(ctx, -0.72, true);
+      sabreAt(ctx, 0.72, false);
+      if (n === 3) { ctx.translate(0, -1); ctx.scale(1.08, 1.08); sabreAt(ctx, 0, false); }
+    }
+    ctx.restore();
+  };
+
   /* ---------------- Efectos ---------------- */
   var RIDER_FX = { kind: 'cav', coat: '#1f3a6e', pants: '#f1ecdc', hat: 'morrion', plume: '#cf2b2b', trim: '#f6f2e4', horse: '#5b3a20', weapon: 'sable', walk: true, t: 0, atk: 0, face: 1, alpha: 1 };
   var GAUCHO_FX = { kind: 'cav', coat: '#8a5a2b', pants: '#3a2a1a', hat: 'gaucho', hatc: '#2a1c12', horse: '#4a2f1c', weapon: 'lanza', poncho: '#b3142a', walk: true, t: 0, atk: 0, face: 1, alpha: 1 };

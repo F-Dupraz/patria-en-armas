@@ -114,7 +114,7 @@
   var KEY = 'patria_en_armas_v1';
 
   function defaults() {
-    return { unlocked: 1, stars: {}, hero: null, sound: true, music: true, sfxVol: 1, musicVol: 1, tutorialDone: false, shake: true, nums: true };
+    return { unlocked: 1, stars: {}, hero: null, sound: true, music: true, sfxVol: 1, musicVol: 1, tutorialDone: false, shake: true, nums: true, diff: 'normal', medals: {} };
   }
 
   TD.Save = {
@@ -136,6 +136,8 @@
         if (typeof o.tutorialDone === 'boolean') d.tutorialDone = o.tutorialDone;
         if (typeof o.shake === 'boolean') d.shake = o.shake;
         if (typeof o.nums === 'boolean') d.nums = o.nums;
+        if (o.diff === 'facil' || o.diff === 'normal' || o.diff === 'dificil') d.diff = o.diff;
+        if (o.medals && typeof o.medals === 'object') d.medals = o.medals;
         this.data = d;
       } catch (e) { /* sin almacenamiento: se juega igual, sin guardar */ }
     },
@@ -147,6 +149,13 @@
     reset: function () {
       this.data = defaults();
       try { window.localStorage.removeItem(KEY); } catch (e) { /* ignorado */ }
+    },
+    // Mayor dificultad con la que se ganó un nivel (0 fácil, 1 normal, 2 difícil; -1 sin ganar).
+    // Las victorias anteriores al selector de dificultad cuentan como «fácil».
+    medal: function (idx) {
+      var k = String(idx), m = this.data.medals[k];
+      if (typeof m === 'number' && m >= 0 && m <= 2) return m | 0;
+      return this.data.stars[k] != null ? 0 : -1;
     },
     totalStars: function () {
       var n = 0, k;

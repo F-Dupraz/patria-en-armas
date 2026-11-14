@@ -17,6 +17,36 @@
   TD.DMG_NAMES = { cont: 'contundente', perf: 'perforante', fuego: 'fuego' };
   TD.ARMORS = ['ligera', 'media', 'pesada'];
 
+  /* ---------- Dificultad ----------
+   * Multiplicadores sobre los enemigos: hp (vida), dmg (daño a soldados, héroe
+   * y torres) y spd (velocidad de marcha). El balance original del juego es 1/1/1.
+   * hpBig es la vida de jefes y barcos: escalan menos porque al río solo llegan
+   * las torres de la barranca y esos solares no se pueden multiplicar.
+   * Se elige en Ajustes y se puede cambiar en plena batalla.                     */
+  TD.DIFF_KEYS = ['facil', 'normal', 'dificil'];
+  TD.DIFFS = {
+    facil:   { name: 'Fácil',   motto: 'Paseo por la Alameda', hp: 0.9, hpBig: 0.9,  dmg: 0.9,  spd: 1.0,  color: '#5cb24a' },
+    normal:  { name: 'Normal',  motto: 'Como Dios manda',      hp: 1.3, hpBig: 1.1,  dmg: 1.15, spd: 1.05, color: '#74acdf' },
+    dificil: { name: 'Difícil', motto: 'A sable y coraje',     hp: 1.5, hpBig: 1.2,  dmg: 1.3,  spd: 1.08, color: '#cf2b2b' }
+  };
+  TD.DEFAULT_DIFF = 'normal';
+  // Dificultad elegida en el guardado (siempre devuelve una válida)
+  TD.diffKey = function () {
+    var k = TD.Save.data.diff;
+    return TD.DIFFS[k] ? k : TD.DEFAULT_DIFF;
+  };
+  // Multiplicador de vida que le toca a un tipo de enemigo
+  TD.diffHp = function (dm, def) { return (def.boss || def.naval) ? dm.hpBig : dm.hp; };
+  // "Enemigos: +30 % de vida (jefes y barcos +15 %) · +15 % de daño · +5 % de velocidad"
+  TD.diffText = function (key) {
+    var d = TD.DIFFS[key], out = [];
+    function pc(v) { var p = Math.round((v - 1) * 100); return (p > 0 ? '+' : '−') + Math.abs(p) + ' %'; }
+    if (d.hp !== 1) out.push(pc(d.hp) + ' de vida' + (d.hpBig !== d.hp ? ' (jefes y barcos ' + pc(d.hpBig) + ')' : ''));
+    if (d.dmg !== 1) out.push(pc(d.dmg) + ' de daño');
+    if (d.spd !== 1) out.push(pc(d.spd) + ' de velocidad');
+    return 'Enemigos: ' + (out.length ? out.join(' · ') : 'sin cambios');
+  };
+
   TD.SELL_RATE = 0.6;                       // vender devuelve el 60 % de lo invertido
   TD.TOWER_KEYS = ['granaderos', 'artilleria', 'tiradores', 'gauchos'];
 

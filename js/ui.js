@@ -74,6 +74,26 @@
     UI.tut = (TD.LEVELS[idx].tutorial && !TD.Save.data.tutorialDone) ? { step: 0, t: 0 } : null;
   }
 
+  // Cambia la dificultad (también en plena batalla: rige desde ese mismo instante)
+  UI.setDiff = function (key) {
+    var g = UI.game;
+    if (!TD.DIFFS[key] || TD.diffKey() === key) return;
+    TD.Save.data.diff = key; TD.Save.save();
+    if (UI.screen === 'game' && g) {
+      if (g.state !== 'won' && g.state !== 'lost') g.setDiff(key);
+      TD.Audio.play('click');
+    }
+  };
+
+  // Botón con el emblema de la dificultad actual: abre los ajustes
+  function diffChip(ctx, x, y, w, h, label, size) {
+    var key = TD.diffKey(), hov = UI.hover(x, y, w, h);
+    D.button(ctx, x, y, w, h, hov);
+    D.diffIcon(ctx, key, x + h / 2 + 2, y + h / 2, (h - 8) / 54, false, hov ? Math.sin(UI.t * 9) * 0.12 : 0);
+    fit(ctx, label + TD.DIFFS[key].name, x + h + 6, y + h / 2 + size * 0.34, w - h - 14, size, D.INK, 'left', true);
+    UI.zone(x, y, w, h, function () { UI.settings = true; if (UI.screen === 'game') TD.Audio.play('click'); });
+  }
+
   UI.togglePause = function () {
     var g = UI.game;
     if (!g || g.state === 'won' || g.state === 'lost') return;
@@ -345,6 +365,7 @@
     UI.button(ctx, 40, 34, 110, 38, '← Menú', function () { UI.go('menu'); }, { size: 16 });
     UI.button(ctx, 160, 34, 230, 38, 'Héroe: ' + TD.HEROES[heroKey()].name, function () { UI.heroBack = 'map'; UI.go('hero'); }, { size: 16 });
     UI.button(ctx, 400, 34, 150, 38, 'Enciclopedia', function () { UI.go('ency'); }, { size: 16 });
+    diffChip(ctx, 738, 34, 242, 38, 'Dificultad: ', 16);
     UI.button(ctx, 990, 34, 120, 38, 'Ajustes', function () { UI.settings = true; }, { size: 16 });
     D.star(ctx, 1150, 54, 13, true);
     D.text(ctx, TD.Save.totalStars() + ' / ' + (TD.LEVELS.length * 3), 1170, 61, 20, D.INK, 'left', true);
@@ -401,6 +422,11 @@
     });
     yy += 6;
     D.text(ctx, lvl.waves.length + ' oleadas · ' + lvl.gold + ' de oro inicial · ' + lvl.lives + ' vidas', px + 28, yy, 14, D.INK2, 'left');
+    var md = TD.Save.medal(UI.mapSel);
+    if (md >= 0) {
+      D.diffIcon(ctx, TD.DIFF_KEYS[md], px + 40, yy + 24, 0.4);
+      D.text(ctx, 'Mejor victoria: en ' + TD.DIFFS[TD.DIFF_KEYS[md]].name.toLowerCase(), px + 58, yy + 29, 14, D.INK2, 'left');
+    }
     if (open) {
       UI.button(ctx, px + 50, py + ph - 140, pw - 100, 56, '¡A la batalla!', function () { UI.startLevel(UI.mapSel); }, { primary: true, size: 24 });
     } else {
@@ -615,6 +641,8 @@
     iconSound(ctx, W - 136, 22, TD.Audio.on);
     UI.button(ctx, W - 208, 6, 44, 32, '', function () { TD.Audio.setMusic(!TD.Audio.music); });
     iconNote(ctx, W - 186, 22, TD.Audio.music);
+    UI.button(ctx, W - 260, 6, 44, 32, '', function () { if (!UI.modal) UI.togglePause(); UI.settings = true; });
+    D.diffIcon(ctx, g.diff, W - 238, 21, 0.54, true);
 
     // --- barra del jefe ---
     if (g.boss && !g.boss.dead && !g.boss.gone) {
@@ -657,7 +685,7 @@
     else if (sel && sel.hero) info = g.hero.def.name + ' — nivel ' + g.hero.level + '. Tocá el mapa para moverlo. Habilidad [H]: ' + g.hero.def.ability.desc;
     else if (sel && sel.enemy) {
       var se = sel.enemy;
-      info = se.def.name + ' — ' + se.def.trait + ' · armadura ' + se.def.armor + ' · vida ' + Math.max(0, Math.ceil(se.hp)) + '/' + se.maxHp + ' · velocidad ' + se.def.spd + ' · oro ' + se.def.gold;
+      info = se.def.name + ' — ' + se.def.trait + ' · armadura ' + se.def.armor + ' · vida ' + Math.max(0, Math.ceil(se.hp)) + '/' + se.maxHp + ' · velocidad ' + Math.round(se.def.spd * g.dm.spd) + ' · oro ' + se.def.gold;
     }
     else if (g.canCall()) info = 'Próxima oleada: ' + TD.waveSummary(lvl.waves[g.waveIdx]);
     else if (g.state === 'running') info = 'Última oleada en curso: ¡aguantá la línea!';
@@ -764,6 +792,7 @@
     D.text(ctx, lvl.year + ' · ' + lvl.place, W / 2, y + 112, 17, D.INK2, 'center', false, true);
     ctx.strokeStyle = 'rgba(59,42,26,0.4)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(x + 50, y + 130); ctx.lineTo(x + w - 50, y + 130); ctx.stroke();
+    diffChip(ctx, x + w - 134, y + 16, 118, 34, '', 15);
     D.text(ctx, lvl.speaker + ':', x + 44, y + 162, 16, D.INK, 'left', true);
     yy = D.wrap(ctx, '—' + lvl.talk, x + 44, y + 186, w - 88, 23, 17, D.INK, 'left', false, true);
     yy += 12;
@@ -821,20 +850,41 @@
     D.text(ctx, val <= 0 ? 'Mudo' : Math.round(val * 100) + ' %', x + w + 120, cy + 8, 20, D.INK, 'right', true);
   }
 
+  function diffCard(ctx, key, x, y, w, h) {
+    var d = TD.DIFFS[key], cur = TD.diffKey() === key, hov = UI.hover(x, y, w, h);
+    D.button(ctx, x, y, w, h, hov, { active: cur, primary: cur });
+    // el elegido se mece; los otros se agitan al pasar el mouse
+    var wob = cur ? Math.sin(UI.t * 3) * 0.07 : (hov ? Math.sin(UI.t * 10) * 0.12 : 0);
+    if (!cur && !hov) ctx.globalAlpha *= 0.8;
+    D.diffIcon(ctx, key, x + w / 2, y + 46, cur ? 1.3 : 1.18, false, wob);
+    if (!cur && !hov) ctx.globalAlpha /= 0.8;
+    D.text(ctx, d.name, x + w / 2, y + h - 28, 22, D.INK, 'center', true);
+    fit(ctx, '«' + d.motto + '»', x + w / 2, y + h - 10, w - 14, 13, D.INK2, 'center', false, true);
+    UI.zone(x, y, w, h, function () { UI.setDiff(key); });
+  }
+
   function drawSettings(ctx) {
-    var A = TD.Audio, S = TD.Save, w = 700, h = 490, x = W / 2 - w / 2, y = H / 2 - h / 2, sx = x + 120, sw = 380;
+    var A = TD.Audio, S = TD.Save, w = 760, h = 650, x = W / 2 - w / 2, y = H / 2 - h / 2, sx = x + 158, sw = 380;
+    var g = UI.screen === 'game' ? UI.game : null, live = g && g.state !== 'won' && g.state !== 'lost';
     dim(ctx, 0.55);
     D.panel(ctx, x, y, w, h);
-    D.text(ctx, 'Ajustes', W / 2, y + 64, 40, D.INK, 'center', true);
-    D.text(ctx, 'Efectos de sonido', sx, y + 122, 19, D.INK, 'left', true);
-    slider(ctx, sx, y + 158, sw, A.sfxVol, A.setSfxVol, function () { A.saveVolumes(); A.play('upgrade'); });
-    D.text(ctx, 'Música', sx, y + 214, 19, D.INK, 'left', true);
-    slider(ctx, sx, y + 250, sw, A.musVol, A.setMusicVol, function () { A.saveVolumes(); });
-    UI.button(ctx, W / 2 - 216, y + 292, 200, 44, 'Sonido: ' + (A.on ? 'sí' : 'no'), function () { A.setOn(!A.on); }, { size: 17 });
-    UI.button(ctx, W / 2 + 16, y + 292, 200, 44, 'Música: ' + (A.music ? 'sí' : 'no'), function () { A.setMusic(!A.music); }, { size: 17 });
-    UI.button(ctx, W / 2 - 216, y + 348, 200, 44, 'Sacudida: ' + (S.data.shake ? 'sí' : 'no'), function () { S.data.shake = !S.data.shake; S.save(); }, { size: 17 });
-    UI.button(ctx, W / 2 + 16, y + 348, 200, 44, 'Números de daño: ' + (S.data.nums ? 'sí' : 'no'), function () { S.data.nums = !S.data.nums; S.save(); }, { size: 16 });
-    UI.button(ctx, W / 2 - 110, y + h - 74, 220, 48, 'Listo', function () { UI.settings = false; }, { primary: true, size: 21 });
+    D.text(ctx, 'Ajustes', W / 2, y + 54, 36, D.INK, 'center', true);
+
+    D.text(ctx, 'Dificultad', x + 64, y + 94, 19, D.INK, 'left', true);
+    fit(ctx, TD.diffText(TD.diffKey()), x + w - 64, y + 94, 440, 14, D.INK2, 'right', false, true);
+    TD.DIFF_KEYS.forEach(function (key, n) { diffCard(ctx, key, x + 64 + n * 216, y + 106, 200, 138); });
+    D.text(ctx, live ? 'Rige desde ya. Si la bajás en plena batalla, la victoria cuenta con la más baja que usaste.'
+      : 'Podés cambiarla cuando quieras, incluso en plena batalla.', W / 2, y + 266, 13, D.INK2, 'center', false, true);
+
+    D.text(ctx, 'Efectos de sonido', sx, y + 302, 19, D.INK, 'left', true);
+    slider(ctx, sx, y + 334, sw, A.sfxVol, A.setSfxVol, function () { A.saveVolumes(); A.play('upgrade'); });
+    D.text(ctx, 'Música', sx, y + 378, 19, D.INK, 'left', true);
+    slider(ctx, sx, y + 410, sw, A.musVol, A.setMusicVol, function () { A.saveVolumes(); });
+    UI.button(ctx, W / 2 - 216, y + 446, 200, 40, 'Sonido: ' + (A.on ? 'sí' : 'no'), function () { A.setOn(!A.on); }, { size: 17 });
+    UI.button(ctx, W / 2 + 16, y + 446, 200, 40, 'Música: ' + (A.music ? 'sí' : 'no'), function () { A.setMusic(!A.music); }, { size: 17 });
+    UI.button(ctx, W / 2 - 216, y + 496, 200, 40, 'Sacudida: ' + (S.data.shake ? 'sí' : 'no'), function () { S.data.shake = !S.data.shake; S.save(); }, { size: 17 });
+    UI.button(ctx, W / 2 + 16, y + 496, 200, 40, 'Números de daño: ' + (S.data.nums ? 'sí' : 'no'), function () { S.data.nums = !S.data.nums; S.save(); }, { size: 16 });
+    UI.button(ctx, W / 2 - 110, y + h - 68, 220, 48, 'Listo', function () { UI.settings = false; }, { primary: true, size: 21 });
   }
 
   function drawLevelUp(ctx, g) {
@@ -866,6 +916,9 @@
       D.panel(ctx, x, y, w, h);
       D.text(ctx, '¡Victoria!', W / 2, y + 66, 46, D.INK, 'center', true);
       D.text(ctx, lvl.name + ' · ' + lvl.year, W / 2, y + 94, 17, D.INK2, 'center', false, true);
+      var rd = res.diff || g.diff;
+      D.diffIcon(ctx, rd, x + w - 62, y + 56, 1);
+      D.text(ctx, TD.DIFFS[rd].name, x + w - 62, y + 102, 14, D.INK2, 'center', true);
       for (i = 0; i < 3; i++) {
         var pop = TD.clamp((UI.modalT - 0.3 - i * 0.35) * 4, 0, 1);
         var sc = i < res.stars ? (pop < 1 ? 0.4 + pop * 0.9 : 1) : 1;
@@ -892,12 +945,13 @@
         UI.button(ctx, bx + (bw + 12) * 2, y + h - 76, bw + 28, 48, 'Enciclopedia', function () { UI.encyTab = 0; UI.encySel = g.idx; UI.go('ency'); }, { primary: true, size: 18 });
       }
     } else {
-      var w2 = 540, h2 = 310, x2 = W / 2 - w2 / 2, y2 = H / 2 - h2 / 2;
+      var w2 = 600, h2 = 310, x2 = W / 2 - w2 / 2, y2 = H / 2 - h2 / 2;
       D.panel(ctx, x2, y2, w2, h2);
       D.text(ctx, 'Derrota', W / 2, y2 + 70, 46, D.PUNZO, 'center', true);
       D.wrap(ctx, 'El enemigo rompió la línea en la oleada ' + g.waveIdx + ' de ' + lvl.waves.length + '. A reorganizarse: probá otra combinación de torres y mirá qué armadura traen.', W / 2, y2 + 112, w2 - 80, 23, 16, D.INK, 'center', false, true);
-      UI.button(ctx, x2 + 50, y2 + h2 - 84, 200, 50, 'Mapa', function () { UI.go('map'); }, { size: 19 });
-      UI.button(ctx, x2 + w2 - 270, y2 + h2 - 84, 220, 50, 'Reintentar', function () { UI.startLevel(g.idx); }, { primary: true, size: 21 });
+      UI.button(ctx, x2 + 28, y2 + h2 - 84, 120, 50, 'Mapa', function () { UI.go('map'); }, { size: 19 });
+      diffChip(ctx, x2 + 160, y2 + h2 - 84, 240, 50, 'Dificultad: ', 17);
+      UI.button(ctx, x2 + 412, y2 + h2 - 84, 160, 50, 'Reintentar', function () { UI.startLevel(g.idx); }, { primary: true, size: 21 });
     }
   }
 
