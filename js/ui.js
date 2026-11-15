@@ -1593,10 +1593,11 @@
   }
 
   /* ---------------- héroe: lista a la izquierda, ficha a la derecha ---------------- */
-  function drawHeroSelectC(ctx) {
+  function drawHeroSelectC(ctx) { inFrame(ctx, drawHeroSelectCBody, 12, 8, 466); }
+
+  function drawHeroSelectCBody(ctx) {
     var t = UI.t, keys = TD.HERO_KEYS;
     if (UI.heroSel < 0 || UI.heroSel >= keys.length) UI.heroSel = Math.max(0, keys.indexOf(TD.Save.data.hero));
-    D.parchment(ctx);
     UI.button(ctx, 12, 8, 112, 38, '← Volver', function () { UI.go(UI.heroBack); }, { size: 15 });
     D.text(ctx, 'Elegí tu héroe', W / 2, 36, 26, D.INK, 'center', true);
     fit(ctx, 'Te acompaña en toda la campaña y podés cambiarlo desde el mapa. La selección no representa la realidad: es solo para el juego.', W / 2, 59, W - 60, 12.5, '#8a5a55', 'center', false, true);
@@ -1648,7 +1649,7 @@
     D.parchment(ctx);
     // Todo va por dentro del marco doble del pergamino (que se estira con la vista): antes la
     // barra arrancaba en y = 7, encima del marco, y en el teléfono parecía salirse de la pantalla.
-    var ix = Math.ceil(22 * W / TD.W) + 7, iy = Math.ceil(22 * H / TD.H) + 7, bh = 36, x = ix;
+    var fi = frameInset(), ix = fi.x, iy = fi.y, bh = 36, x = ix;
     UI.button(ctx, x, iy, 88, bh, '← Menú', function () { UI.go('menu'); }, { size: 14 }); x += 94;
     UI.button(ctx, x, iy, 160, bh, 'Héroe: ' + TD.HEROES[heroKey()].name, function () { UI.heroBack = 'map'; UI.go('hero'); }, { size: 14 }); x += 166;
     UI.button(ctx, x, iy, 112, bh, 'Enciclopedia', function () { UI.go('ency'); }, { size: 14 }); x += 118;
@@ -1725,9 +1726,28 @@
     fit(ctx, 'Vida ' + def.hp + ' · vel. ' + def.spd + ' · oro ' + def.gold, ex + 70, ey + 56, tw, 13, D.INK2, 'left');
   }
 
-  function drawEncyC(ctx) {
-    var i, k, tab = UI.encyTab, tabs = ['Batallas', 'Daño y torres', 'Enemigos'], tx = W - 10;
+  // Margen interior del marco doble del pergamino en la vista compacta (el marco se estira con
+  // la vista): lo que se dibuje por fuera de esto queda encima del marco y parece salirse.
+  function frameInset() {
+    return { x: Math.ceil(22 * W / TD.W) + 7, y: Math.ceil(22 * H / TD.H) + 7 };
+  }
+
+  // Varias pantallas compactas (enciclopedia, héroe, condecoraciones) están diseñadas pegadas al
+  // borde de la vista: de y = top a y = bot y de x = m a W - m, o sea encima del marco. En vez de
+  // rehacer cada coordenada, se achican un poco (~6 %) para que entren por dentro, y mientras
+  // tanto W pasa a ser el ancho «virtual» que le corresponde a esa escala.
+  function inFrame(ctx, body, m, top, bot) {
+    var fi = frameInset(), s = (H - 2 * fi.y) / (bot - top), realW = W;
     D.parchment(ctx);
+    W = (realW - 2 * fi.x) / s + 2 * m;
+    push(ctx, s, fi.x - m * s, fi.y - top * s);
+    try { body(ctx); } finally { pop(ctx); W = realW; }
+  }
+
+  function drawEncyC(ctx) { inFrame(ctx, drawEncyCBody, 10, 7, 472); }
+
+  function drawEncyCBody(ctx) {
+    var i, k, tab = UI.encyTab, tabs = ['Batallas', 'Daño y torres', 'Enemigos'], tx = W - 10;
     UI.button(ctx, 10, 7, 108, 38, '← Volver', function () { UI.go(TD.Save.data.hero ? 'map' : 'menu'); }, { size: 15 });
     D.text(ctx, 'Enciclopedia', 132, 35, 24, D.INK, 'left', true);
     for (i = 2; i >= 0; i--) {
@@ -1815,9 +1835,10 @@
   }
 
   /* ---------------- condecoraciones: de a ocho por página ---------------- */
-  function drawLogrosC(ctx) {
+  function drawLogrosC(ctx) { inFrame(ctx, drawLogrosCBody, 10, 7, 472); }
+
+  function drawLogrosCBody(ctx) {
     var L = TD.Logros, tab = UI.logTab, T = L.TIERS[tab], all = L.total(), n, items = [], per = 8;
-    D.parchment(ctx);
     UI.button(ctx, 10, 7, 108, 38, '← Volver', function () { UI.go(UI.logBack); }, { size: 15 });
     if (W >= 1000) D.text(ctx, 'Condecoraciones', 132, 35, 24, D.INK, 'left', true);
     L.TIERS.forEach(function (tr, k) {
