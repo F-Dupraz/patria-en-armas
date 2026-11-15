@@ -1648,7 +1648,7 @@
     D.parchment(ctx);
     // Todo va por dentro del marco doble del pergamino (que se estira con la vista): antes la
     // barra arrancaba en y = 7, encima del marco, y en el teléfono parecía salirse de la pantalla.
-    var ix = Math.ceil(22 * W / TD.W) + 7, iy = Math.ceil(22 * H / TD.H) + 7, bh = 36, x = ix;
+    var fi = frameInset(), ix = fi.x, iy = fi.y, bh = 36, x = ix;
     UI.button(ctx, x, iy, 88, bh, '← Menú', function () { UI.go('menu'); }, { size: 14 }); x += 94;
     UI.button(ctx, x, iy, 160, bh, 'Héroe: ' + TD.HEROES[heroKey()].name, function () { UI.heroBack = 'map'; UI.go('hero'); }, { size: 14 }); x += 166;
     UI.button(ctx, x, iy, 112, bh, 'Enciclopedia', function () { UI.go('ency'); }, { size: 14 }); x += 118;
@@ -1725,9 +1725,25 @@
     fit(ctx, 'Vida ' + def.hp + ' · vel. ' + def.spd + ' · oro ' + def.gold, ex + 70, ey + 56, tw, 13, D.INK2, 'left');
   }
 
+  // Margen interior del marco doble del pergamino en la vista compacta (el marco se estira con
+  // la vista): lo que se dibuje por fuera de esto queda encima del marco y parece salirse.
+  function frameInset() {
+    return { x: Math.ceil(22 * W / TD.W) + 7, y: Math.ceil(22 * H / TD.H) + 7 };
+  }
+
+  // La enciclopedia compacta está diseñada de y = 7 a y = 472 y de x = 10 a W - 10, o sea encima
+  // del marco. En vez de rehacer cada coordenada, se achica un poco (~6 %) para que entre por
+  // dentro, y mientras tanto W pasa a ser el ancho «virtual» que le corresponde a esa escala.
   function drawEncyC(ctx) {
-    var i, k, tab = UI.encyTab, tabs = ['Batallas', 'Daño y torres', 'Enemigos'], tx = W - 10;
+    var fi = frameInset(), s = (H - 2 * fi.y) / (472 - 7), realW = W;
     D.parchment(ctx);
+    W = (realW - 2 * fi.x) / s + 20;
+    push(ctx, s, fi.x - 10 * s, fi.y - 7 * s);
+    try { drawEncyCBody(ctx); } finally { pop(ctx); W = realW; }
+  }
+
+  function drawEncyCBody(ctx) {
+    var i, k, tab = UI.encyTab, tabs = ['Batallas', 'Daño y torres', 'Enemigos'], tx = W - 10;
     UI.button(ctx, 10, 7, 108, 38, '← Volver', function () { UI.go(TD.Save.data.hero ? 'map' : 'menu'); }, { size: 15 });
     D.text(ctx, 'Enciclopedia', 132, 35, 24, D.INK, 'left', true);
     for (i = 2; i >= 0; i--) {
