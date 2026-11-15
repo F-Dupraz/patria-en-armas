@@ -36,7 +36,7 @@
     var def = TD.ENEMIES[type], k;
     this.g = g; this.type = type; this.def = def;
     this.pi = pi; this.path = g.paths[pi]; this.wi = wi;
-    this.maxHp = Math.round(def.hp * (g.lvl.hpMul || 1) * TD.diffHp(g.dm, def));
+    this.maxHp = Math.round(def.hp * (g.lvl.hpMul || 1) * TD.diffHp(g.dm, def, g.lvl));
     this.hp = this.maxHp;
     this.d = d0 || 0;
     this.off = (def.naval || def.boss) ? 0 : TD.rand(-9, 9);

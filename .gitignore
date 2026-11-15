@@ -73,3 +73,5 @@ desktop.ini
 # Descomentá si no querés subir notas de desarrollo
 # NOTAS.md
 # bitacora.md
+# Estrategias guardadas por el simulador de balance
+tools/balance/*.json
