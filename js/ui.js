@@ -20,7 +20,8 @@
     mapSel: 0, encyTab: 0, encySel: 0, confirmReset: 0,
     tut: null, heroBack: 'menu',
     logTab: 0, logBack: 'menu', logNew: {},
-    heroSel: -1, logPage: 0, iosHelp: false      // solo para el diseño compacto / instalación
+    heroSel: -1, logPage: 0, iosHelp: false,     // solo para el diseño compacto / instalación
+    buildOpen: false, infoKey: '', infoT: 0
   };
   TD.UI = UI;
 
@@ -96,7 +97,7 @@
   function goNow(screen) {
     TD.Logros.flush();                 // contadores de la batalla que se deja
     UI.screen = screen; UI.modal = null; UI.confirmReset = 0; UI.settings = false;
-    UI.iosHelp = false; UI.heroSel = -1; UI.logPage = 0;
+    UI.iosHelp = false; UI.heroSel = -1; UI.logPage = 0; UI.buildOpen = false;
     if (screen !== 'game') UI.game = null;
   }
 
@@ -117,7 +118,7 @@
   function startNow(idx) {
     TD.Logros.flush();
     UI.game = new TD.Game(idx, heroKey());
-    UI.screen = 'game';
+    UI.screen = 'game'; UI.buildOpen = false; UI.infoKey = '';
     UI.modal = 'brief'; UI.modalT = 0;
     UI.tut = (TD.LEVELS[idx].tutorial && !TD.Save.data.tutorialDone) ? { step: 0, t: 0 } : null;
   }
@@ -143,21 +144,45 @@
   }
 
   /* ---------------- el mundo dentro de la vista ---------------- */
-  // Diseño compacto de batalla: barra superior (CT), columna derecha con héroe, torres y
-  // oleada (CCOL como mínimo) y franja de información abajo (CINFO). El mundo de 1280x720
-  // se achica para entrar en lo que queda, mostrando al menos lo que dejan ver las barras clásicas.
-  var CT = 44, CCOL = 196, CCOL_MAX = 320, CINFO = 36;
-  var WT = { f: 1, ox: 0, oy: 0, ax: 0, ay: 0, aw: TD.W, ah: TD.H, col: 0 };
+  // Diseño compacto de batalla: el mapa ocupa toda la pantalla debajo de la barra superior (CT).
+  // Lo demás flota encima y solo cuando hace falta: el héroe abajo a la izquierda, el botón
+  // «Construir» abajo a la derecha y una bandeja (CSH de alto) con las torres o las mejoras,
+  // que se abre al tocar un solar, una torre o ese botón. El mundo de 1280x720 se achica lo
+  // justo para que entre lo mismo que dejan ver las barras del diseño clásico.
+  var CT = 46, CSH = 100;
+  var WT = { f: 1, ox: 0, oy: 0, ax: 0, ay: 0, aw: TD.W, ah: TD.H };
   function worldLayout() {
-    if (!C) { WT.f = 1; WT.ox = 0; WT.oy = 0; WT.ax = 0; WT.ay = 0; WT.aw = W; WT.ah = H; WT.col = 0; return WT; }
+    if (!C) { WT.f = 1; WT.ox = 0; WT.oy = 0; WT.ax = 0; WT.ay = 0; WT.aw = W; WT.ah = H; return WT; }
     var vis = TD.BAR_Y - 28 - TD.TOP_H;                 // alto del mundo que queda a la vista en el diseño clásico
-    var ah = H - CT - CINFO, f = Math.min((W - CCOL) / TD.W, ah / vis);
-    var col = TD.clamp(W - Math.ceil(TD.W * f), CCOL, CCOL_MAX), aw = W - col;
-    WT.f = f; WT.col = col; WT.ax = 0; WT.ay = CT; WT.aw = aw; WT.ah = ah;
-    WT.ox = (aw - TD.W * f) / 2;
+    var ah = H - CT, f = Math.min(W / TD.W, ah / vis);
+    WT.f = f; WT.ay = CT; WT.ah = ah;
+    WT.ox = (W - TD.W * f) / 2;
     WT.oy = CT + (ah - vis * f) / 2 - TD.TOP_H * f;
+    // en pantallas muy apaisadas sobran franjas a los costados: el mundo se recorta a su ancho
+    WT.ax = Math.max(0, WT.ox); WT.aw = Math.min(W, TD.W * f);
     return WT;
   }
+
+  /* ---------------- bandeja de construcción (solo diseño compacto) ---------------- */
+  // Está abierta si hay un solar o una torre elegidos, una torre «armada» o se tocó «Construir».
+  function sheetKind(g) {
+    if (!g || g.state === 'won' || g.state === 'lost') return null;
+    if (g.sel && g.sel.tower) return 'tower';
+    if ((g.sel && g.sel.slot) || g.armed || UI.buildOpen) return 'build';
+    return null;
+  }
+
+  // La bandeja va abajo, salvo que tape justo lo que se eligió: entonces sube bajo la barra.
+  function sheetTop(g, wt) {
+    var s = g.sel && (g.sel.tower || g.sel.slot);
+    return !!s && wt.oy + s.y * wt.f + 22 > H - CSH - 8;
+  }
+
+  UI.closeSheet = function () {
+    var g = UI.game;
+    UI.buildOpen = false;
+    if (g) { g.armed = null; g.mode = null; if (g.sel && (g.sel.tower || g.sel.slot)) g.sel = null; }
+  };
 
   UI.togglePause = function () {
     var g = UI.game;
@@ -190,6 +215,8 @@
     updateMusic(g);
     if (UI.screen !== 'game' || !g) return;
     var wt = worldLayout();
+    UI.infoT += dt;
+    if (g.sel && !g.sel.slot) UI.buildOpen = false;
     g.mx = (UI.mx - wt.ox) / wt.f; g.my = (UI.my - wt.oy) / wt.f;
     if (!UI.modal) {
       g.update(dt);
@@ -208,11 +235,11 @@
     'Podés adelantar la próxima oleada para ganar oro extra. Tocá a tu héroe y después el mapa para moverlo. P o Esc pausan.'
   ];
 
-  // Mismo recorrido para pantalla táctil chica: sin teclas y con la barra a la derecha
+  // Mismo recorrido para pantalla táctil chica: sin teclas y con la bandeja de torres
   var TUT_C = [
     'Tocá un solar vacío (los círculos de piedra con banderín) para elegir dónde construir.',
-    'Ahora elegí una torre en la barra de la derecha. Los Tiradores son un buen comienzo.',
-    'Si te alcanza el oro, construí otra defensa. Después tocá «Llamar oleada» para empezar.',
+    'Ahora elegí una torre en la bandeja que se abrió. Los Tiradores son un buen comienzo.',
+    'Si te alcanza el oro, construí otra defensa. Después tocá «Llamar oleada», arriba, para empezar.',
     'Cada enemigo abatido da oro. Tocá una torre para mejorarla: cada una tiene dos ramas distintas.',
     'Podés adelantar la próxima oleada para ganar oro extra. Tocá a tu héroe y después el mapa para moverlo.'
   ];
@@ -243,9 +270,22 @@
     ctx.closePath(); ctx.fill(); ctx.stroke();
   }
 
+  // Recuadro dorado que late alrededor de un botón (tutorial en diseño compacto)
+  function pulseRect(ctx, r) {
+    if (!r) return;
+    var k = 3 + (Math.sin(UI.t * 6) + 1) * 2.5;
+    ctx.strokeStyle = D.GOLD; ctx.lineWidth = 4;
+    D.rr(ctx, r.x - k, r.y - k, r.w + k * 2, r.h + k * 2, 8 + k); ctx.stroke();
+  }
+
   function drawTutorial(ctx, g) {
     var tu = UI.tut, x = 300, y = 54, w = 680, h = 62, wt = WT;
-    if (C) { w = Math.min(680, wt.aw - 20); x = (wt.aw - w) / 2; y = CT + 6; }
+    if (C) {
+      // arriba, bajo la barra; si la bandeja subió, abajo entre el héroe y «Construir»
+      var x0 = CHERO.x + CHERO.w + 8, x1 = W - CBLD - 16;
+      w = Math.min(640, x1 - x0); x = (W - w) / 2; y = CT + 6;
+      if (sheetKind(g) && sheetTop(g, wt)) { x = (x0 + x1 - w) / 2; y = H - h - 8; }
+    }
     D.panel(ctx, x, y, w, h, 0.96);
     D.text(ctx, 'Instrucción ' + (tu.step + 1) + ' de ' + TUT.length, x + 16, y + 20, 12, D.INK2, 'left', true);
     wrapMax(ctx, (C ? TUT_C : TUT)[tu.step], x + 16, y + 38, w - (C ? 76 : 70), 17, 14, D.INK, 2);
@@ -253,8 +293,8 @@
     else UI.button(ctx, x + w - 44, y + 8, 34, 26, '×', endTutorial, { size: 18 });
     // las flechas del mapa se ubican pasando por la transformación del mundo
     if (tu.step === 0 && g.slots.length) arrow(ctx, wt.ox + g.slots[0].x * wt.f, wt.oy + (g.slots[0].y - 30) * wt.f);
-    else if (tu.step === 1) { if (C) arrow(ctx, W - wt.col / 2, CCTX + 2 * 58); else arrow(ctx, 232 + 2 * 184 + 89, TD.BAR_Y); }
-    else if (tu.step === 2) { if (C) arrow(ctx, W - wt.col / 2, H - 74); else arrow(ctx, 1126, TD.BAR_Y); }
+    else if (tu.step === 1) { if (C) pulseRect(ctx, CR.pick || CR.build); else arrow(ctx, 232 + 2 * 184 + 89, TD.BAR_Y); }
+    else if (tu.step === 2) { if (C) pulseRect(ctx, CR.wave); else arrow(ctx, 1126, TD.BAR_Y); }
     else if (tu.step === 3 && g.towers.length) arrow(ctx, wt.ox + g.towers[0].x * wt.f, wt.oy + (g.towers[0].y - 96) * wt.f);
   }
 
@@ -698,10 +738,11 @@
       } else if (UI.modal || UI.settings) {
         x = W / 2 - w / 2; y = 4 - (1 - e) * (h + 14);
       } else {
-        // entra por el borde del mundo, sin tapar la columna de torres
-        x = WT.aw - w - 10 + (1 - e) * (w + 20); y = CT + (UI.tut ? 76 : 8);
+        // entra por la derecha, justo debajo de la barra superior
+        var tg = UI.game, up = !!tg && !!sheetKind(tg) && sheetTop(tg, WT);      // la bandeja está arriba
+        x = W - w - 10 + (1 - e) * (w + 20); y = CT + (up ? CSH + 8 : (UI.tut ? 76 : 8));
         clip = true;
-        ctx.save(); ctx.beginPath(); ctx.rect(0, CT, WT.aw, H - CT); ctx.clip();
+        ctx.save(); ctx.beginPath(); ctx.rect(0, CT, W, H - CT); ctx.clip();
       }
     }
     ctx.save();
@@ -784,14 +825,15 @@
 
   /* ---------------- piezas del HUD que comparten los dos diseños ---------------- */
   // Marcadores de entrada: muestran por dónde viene la oleada y sirven para llamarla.
-  // mk agranda el dibujo y half es la mitad del lado de la zona de toque (en px del mundo).
-  function entryMarkers(ctx, g, mk, half) {
+  // mk agranda el dibujo y half es la mitad del lado de la zona de toque (en px del mundo);
+  // dodge (opcional) corre el marcador para que no quede tapado por la interfaz.
+  function entryMarkers(ctx, g, mk, half, dodge) {
     var i, t = UI.t, next = g.lvl.waves[g.waveIdx], used = {};
     for (i = 0; i < next.groups.length; i++) used[next.groups[i].path] = true;
     g.entries.forEach(function (en) {
       if (!used[en.pi]) return;
       var r = (17 + Math.sin(t * 5) * 2) * mk, m = mk > 1 ? 28 * mk : 0;      // agrandado, no se sale del mundo
-      var ex = m ? TD.clamp(en.x, m, TD.W - m) : en.x, ey = en.y;
+      var ex = m ? TD.clamp(en.x, m, TD.W - m) : en.x, ey = dodge ? dodge(en.x, en.y, r + 5 * mk) : en.y;
       ctx.fillStyle = 'rgba(179,20,42,0.92)'; ctx.strokeStyle = D.BLANCO; ctx.lineWidth = 2.5 * mk;
       ctx.beginPath(); ctx.arc(ex, ey, r, 0, TAU); ctx.fill(); ctx.stroke();
       D.towerIcon(ctx, 'granaderos', ex, ey, 0.9 * mk);
@@ -861,7 +903,7 @@
       var ad = TD.TOWERS[g.armed], am = TD.DMG[ad.base.type];
       return ad.name + ': ' + ad.desc + '  |  ' + TD.DMG_NAMES[ad.base.type] + ' — ligera ×' + am.ligera + ' · media ×' + am.media + ' · pesada ×' + am.pesada + '  →  tocá un solar';
     }
-    if (sel && sel.slot) return C ? 'Elegí qué construir en este solar con los botones de la derecha.' : 'Elegí qué construir en este solar (botones de abajo o teclas 1 a 4).';
+    if (sel && sel.slot) return C ? 'Elegí qué construir en este solar.' : 'Elegí qué construir en este solar (botones de abajo o teclas 1 a 4).';
     if (sel && sel.hero) return g.hero.def.name + ' — nivel ' + g.hero.level + '. Tocá el mapa para moverlo. Habilidad' + (C ? '' : ' [H]') + ': ' + g.hero.def.ability.desc;
     if (sel && sel.enemy) {
       var se = sel.enemy;
@@ -1019,116 +1061,209 @@
   }
 
   /* ---------------- HUD compacto (celular) ---------------- */
-  var CCTX = CT + 112;       // comienzo de la zona de contexto en la columna
+  var CHERO = { x: 8, w: 196, h: 68 };     // tarjeta del héroe, abajo a la izquierda
+  var CBLD = 62;                           // lado del botón «Construir», abajo a la derecha
+  var CR = { wave: null, pick: null, build: null };   // recuadros que señala el tutorial
 
   function towerButtonC(ctx, g, key, x, y, w, h) {
     var def = TD.TOWERS[key], can = g.gold >= def.cost, hov = UI.hover(x, y, w, h);
     D.button(ctx, x, y, w, h, hov && can, { disabled: !can, active: g.armed === key });
-    D.towerIcon(ctx, key, x + 25, y + h / 2, 1.35);
-    fit(ctx, TD.towerName(key, g.lvl.act), x + 50, y + 21, w - 58, 14.5, can ? D.INK : '#8b7a5c', 'left', true);
-    D.coin(ctx, x + 57, y + 37, 6.5);
-    D.text(ctx, String(def.cost), x + 68, y + 42, 15, can ? D.INK : '#a0522d', 'left', true);
+    D.towerIcon(ctx, key, x + 28, y + h / 2, 1.5);
+    fit(ctx, TD.towerName(key, g.lvl.act), x + 56, y + 26, w - 64, 16, can ? D.INK : '#8b7a5c', 'left', true);
+    D.coin(ctx, x + 64, y + 43, 7.5);
+    D.text(ctx, String(def.cost), x + 77, y + 49, 17, can ? D.INK : '#a0522d', 'left', true);
     UI.zone(x, y, w, h, function () { UI.pickTower(key); });
   }
 
   function upgradeButtonC(ctx, g, tw, b, x, y, w, h) {
     var br = tw.def.branches[b], cost = tw.upgradeCost(b), can = g.gold >= cost, hov = UI.hover(x, y, w, h);
     D.button(ctx, x, y, w, h, hov && can, { disabled: !can });
-    fit(ctx, br.name + ' ' + ['I', 'II', 'III'][tw.level], x + 10, y + 20, w - 74, 15, can ? D.INK : '#8b7a5c', 'left', true);
-    D.coin(ctx, x + w - 52, y + 15, 6.5);
-    D.text(ctx, String(cost), x + w - 42, y + 20, 14.5, can ? D.INK : '#a0522d', 'left', true);
-    wrapMax(ctx, br.desc, x + 10, y + 37, w - 18, 14, 12, can ? D.INK2 : '#8b7a5c', Math.max(1, Math.floor((h - 28) / 14)));
+    fit(ctx, br.name + ' ' + ['I', 'II', 'III'][tw.level], x + 10, y + 21, w - 78, 15.5, can ? D.INK : '#8b7a5c', 'left', true);
+    D.coin(ctx, x + w - 54, y + 16, 7);
+    D.text(ctx, String(cost), x + w - 43, y + 21, 15.5, can ? D.INK : '#a0522d', 'left', true);
+    wrapMax(ctx, br.desc, x + 10, y + 38, w - 18, 13.5, 12, can ? D.INK2 : '#8b7a5c', Math.max(1, Math.floor((h - 28) / 14)));
     UI.zone(x, y, w, h, function () {
       if (!tw.upgrade(b)) { g.addText(tw.x, tw.y - 80, 'Te falta oro', '#ffb0a0', 14); g.goldDeny = 0.4; }
     });
   }
 
+  // Llamar la oleada desde la barra superior: dos renglones cortos
+  function waveButtonC(ctx, g, x, y, w, h) {
+    CR.wave = { x: x, y: y, w: w, h: h };
+    if (!g.canCall()) {
+      UI.button(ctx, x, y, w, h, 'Última oleada en curso', null, { disabled: true, size: 15 });
+      return;
+    }
+    var hov = UI.hover(x, y, w, h), mx = x + w / 2, eb = g.earlyBonus(), prep = g.state === 'prep';
+    D.button(ctx, x, y, w, h, hov, { primary: true });
+    fit(ctx, prep ? '¡Llamar oleada!' : 'Llamar oleada ' + (g.waveIdx + 1), mx, y + 17, w - 14, 16, D.INK, 'center', true);
+    fit(ctx, prep ? 'empieza el combate' : 'llega en ' + Math.max(0, Math.ceil(g.nextTimer)) + ' s' + (eb > 0 ? ' · +' + eb + ' de oro' : ''), mx, y + 31, w - 14, 12, D.INK, 'center');
+    UI.zone(x, y, w, h, function () { g.callWave(false); });
+  }
+
+  function iconBuild(ctx, x, y) {
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(-0.62);
+    ctx.strokeStyle = D.INK; ctx.lineWidth = 1.5;
+    ctx.fillStyle = '#8a5a2b'; D.rr(ctx, -2.6, -5, 5.2, 23, 2); ctx.fill(); ctx.stroke();      // mango
+    ctx.fillStyle = '#9aa0a8'; D.rr(ctx, -12, -13, 24, 10, 2.5); ctx.fill(); ctx.stroke();     // cabeza
+    ctx.restore();
+  }
+
+  // Un marcador de entrada que cae debajo de la bandeja, de la tarjeta del héroe o del botón
+  // «Construir» se corre hasta quedar a la vista (devuelve la nueva y, en px del mundo).
+  function dodgeY(wt, kind, top, ex, ey, r) {
+    var vx = wt.ox + ex * wt.f, vy = wt.oy + ey * wt.f, rr = r * wt.f + 6, lim;
+    if (kind && top) {
+      lim = CT + CSH + 10;
+      if (vy - rr < lim) vy = lim + rr;
+    } else if (kind) {
+      lim = H - CSH - 12;
+      if (vy + rr > lim) vy = lim - rr;
+    } else {
+      lim = H - CHERO.h - 14;
+      if (vy + rr > lim && (vx - rr < CHERO.x + CHERO.w || vx + rr > W - CBLD - 14)) vy = lim - rr;
+    }
+    return (vy - wt.oy) / wt.f;
+  }
+
+  // Renglón de ayuda flotante: lo que se eligió queda fijo; el aviso de la próxima oleada
+  // aparece unos segundos cada vez que cambia (o al tocar «Oleada» en la barra).
+  function infoPill(ctx, g) {
+    var info = infoText(g), fixed = !!(g.sel || g.mode), a = 1;
+    if (!info) return;
+    if (!fixed) {
+      if (info !== UI.infoKey) { UI.infoKey = info; UI.infoT = 0; }
+      a = TD.clamp((7 - UI.infoT) / 0.6, 0, 1);
+      if (a <= 0) return;
+    }
+    var x0 = CHERO.x + CHERO.w + 10, x1 = W - CBLD - 18, maxW = x1 - x0 - 24, lines, pw, ph;
+    D.font(ctx, 13, false);
+    lines = Math.min(2, countLines(ctx, info, maxW));
+    pw = lines > 1 ? maxW + 24 : Math.min(maxW, ctx.measureText(info).width) + 24;
+    ph = lines > 1 ? 40 : 26;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(46,32,18,0.86)'; D.rr(ctx, (x0 + x1 - pw) / 2, H - ph - 8, pw, ph, 10); ctx.fill();
+    wrapMax(ctx, info, (x0 + x1) / 2, H - ph + 9.5, maxW, 15, 13, D.PARCH, 2, 'center');
+    ctx.restore();
+  }
+
+  // Bandeja: un renglón de ayuda y los botones de construir o de la torre elegida
+  function drawSheet(ctx, g, kind, top) {
+    var x = 6, w = W - 12, h = CSH, y = top ? CT + 4 : H - h - 6, gap = 6;
+    ctx.fillStyle = 'rgba(30,20,10,0.35)'; D.rr(ctx, x + 2, y + 3, w, h, 12); ctx.fill();
+    var gr = ctx.createLinearGradient(0, y, 0, y + h);
+    gr.addColorStop(0, 'rgba(74,53,32,0.97)'); gr.addColorStop(1, 'rgba(46,32,18,0.97)');
+    ctx.fillStyle = gr; D.rr(ctx, x, y, w, h, 12); ctx.fill();
+    ctx.strokeStyle = D.GOLD; ctx.lineWidth = 2; ctx.stroke();
+    UI.zone(x, y, w, h, null);
+    fit(ctx, infoText(g) || 'Elegí una torre y después tocá un solar del mapa.', x + 14, y + 20, w - 28, 13.5, D.PARCH, 'left');
+
+    var by = y + 30, bh = 62, cx = x + 8, cw = w - 16, bw;
+    UI.button(ctx, cx + cw - 52, by, 52, bh, '×', UI.closeSheet, { size: 28 });
+    cw -= 52 + gap;
+    if (kind === 'tower') {
+      var tw = g.sel.tower, sx;
+      sx = cx + cw - 112;
+      UI.button(ctx, sx, by, 112, bh, '', function () { g.sell(tw); }, { danger: true });
+      D.text(ctx, 'Vender', sx + 56, by + 25, 16, D.INK, 'center', true);
+      D.coin(ctx, sx + 38, by + 42, 7);
+      D.text(ctx, '+' + tw.sellValue(), sx + 50, by + 47.5, 15.5, D.INK, 'left', true);
+      cw -= 112 + gap;
+      if (tw.key === 'granaderos') {
+        sx = cx + cw - 112;
+        UI.button(ctx, sx, by, 112, bh, '', function () { g.mode = g.mode === 'rally' ? null : 'rally'; }, { active: g.mode === 'rally' });
+        D.text(ctx, 'Punto de', sx + 56, by + 26, 15, D.INK, 'center', true);
+        D.text(ctx, 'reunión', sx + 56, by + 45, 15, D.INK, 'center', true);
+        cw -= 112 + gap;
+      }
+      if (tw.level < 3) {
+        if (tw.branch < 0) {
+          bw = (cw - gap) / 2;
+          upgradeButtonC(ctx, g, tw, 0, cx, by, bw, bh);
+          upgradeButtonC(ctx, g, tw, 1, cx + bw + gap, by, bw, bh);
+        } else {
+          upgradeButtonC(ctx, g, tw, tw.branch, cx, by, Math.min(cw, 460), bh);
+        }
+      } else {
+        abilityButton(ctx, tw, cx, by, Math.min(cw, 460), bh);
+      }
+    } else {
+      bw = (cw - gap * 3) / 4;
+      TD.TOWER_KEYS.forEach(function (key, n) {
+        var tx = cx + n * (bw + gap);
+        if (key === 'tiradores') CR.pick = { x: tx, y: by, w: bw, h: bh };
+        towerButtonC(ctx, g, key, tx, by, bw, bh);
+      });
+    }
+  }
+
   function drawHUDC(ctx, g, wt) {
-    var lvl = g.lvl, sel = g.sel, mid = wt.aw / 2;
-    var x0 = W - wt.col, cx = x0 + 8, iw = wt.col - 16;
+    var mid = W / 2, kind = UI.modal ? null : sheetKind(g), top = !!kind && sheetTop(g, wt), low = !!kind && !top;
+    CR.wave = CR.pick = CR.build = null;
 
     // --- marcadores de entrada, sobre el mundo y agrandados para el dedo ---
     if (g.canCall() && !UI.modal) {
       var mk = TD.clamp(0.95 / wt.f, 1, 1.7);
       push(ctx, wt.f, wt.ox, wt.oy);
-      entryMarkers(ctx, g, mk, 26 * mk);
+      entryMarkers(ctx, g, mk, 26 * mk, function (ex, ey, r) { return dodgeY(wt, kind, top, ex, ey, r); });
       pop(ctx);
     }
 
-    // --- barra superior ---
-    ctx.fillStyle = 'rgba(46,32,18,0.96)'; ctx.fillRect(0, 0, W, CT);
+    // --- barra superior: vidas, oro, oleada · llamar oleada · dificultad, velocidad y pausa ---
+    ctx.fillStyle = 'rgba(46,32,18,0.97)'; ctx.fillRect(0, 0, W, CT);
     ctx.fillStyle = D.GOLD; ctx.fillRect(0, CT - 2, W, 2);
     UI.zone(0, 0, W, CT, null);
     topStatus(ctx, g);
-    var nx = 362, nw = W - 178 - nx;
-    if (nw > 110) fit(ctx, lvl.name + ' · ' + lvl.year, nx + nw / 2, 29, nw, 19, D.PARCH, 'center', true, true);
-    UI.button(ctx, W - 58, 5, 52, 34, '', UI.togglePause);
-    iconPause(ctx, W - 32, 22);
-    UI.button(ctx, W - 114, 5, 52, 34, 'x' + g.speed, function () { g.speed = g.speed === 1 ? 2 : 1; TD.Audio.play('click'); }, { size: 18, active: g.speed === 2 });
-    UI.button(ctx, W - 170, 5, 52, 34, '', function () { if (!UI.modal) UI.togglePause(); UI.settings = true; });
-    D.diffIcon(ctx, g.diff, W - 144, 21, 0.56, true);
+    UI.zone(222, 0, 138, CT, function () { UI.infoKey = ''; });      // tocar «Oleada» repite qué viene
+    var bw = 54, bh = 38, by = 3, rx = W - 6 - bw;
+    UI.button(ctx, rx, by, bw, bh, '', UI.togglePause);
+    iconPause(ctx, rx + bw / 2, by + bh / 2);
+    rx -= bw + 6;
+    UI.button(ctx, rx, by, bw, bh, 'x' + g.speed, function () { g.speed = g.speed === 1 ? 2 : 1; TD.Audio.play('click'); }, { size: 19, active: g.speed === 2 });
+    rx -= bw + 6;
+    UI.button(ctx, rx, by, bw, bh, '', function () { if (!UI.modal) UI.togglePause(); UI.settings = true; });
+    D.diffIcon(ctx, g.diff, rx + bw / 2, by + bh / 2 - 1, 0.6, true);
+    var wx0 = 366, wx1 = rx - 10, ww = Math.min(300, wx1 - wx0);
+    waveButtonC(ctx, g, wx0 + (wx1 - wx0 - ww) / 2, by, ww, bh);
 
-    // --- jefe y cartel, centrados sobre el mundo ---
-    var boss = g.boss && !g.boss.dead && !g.boss.gone;
-    if (boss) bossBar(ctx, g, mid, CT + 6, Math.min(420, wt.aw - 24));
-    if (g.banner && !UI.modal) drawBanner(ctx, g, mid, UI.tut ? CT + 74 : (boss ? CT + 46 : CT + 10), wt.aw - 40, 19);
+    // --- jefe y cartel, centrados sobre el mapa ---
+    var boss = g.boss && !g.boss.dead && !g.boss.gone, ty = CT + 6 + (top ? CSH + 4 : 0);
+    if (boss) { bossBar(ctx, g, mid, ty, Math.min(420, W - 24)); ty += 40; }
+    if (g.banner && !UI.modal) drawBanner(ctx, g, mid, ty + (UI.tut && !top ? 70 : 2), W - 40, 19);
 
-    // --- franja de información (dos renglones como mucho) ---
-    var iy = H - CINFO, info = infoText(g);
-    ctx.fillStyle = '#2e2012'; ctx.fillRect(0, iy, wt.aw, CINFO);
-    ctx.fillStyle = D.GOLD; ctx.fillRect(0, iy, wt.aw, 1.5);
-    UI.zone(0, iy, wt.aw, CINFO, null);
-    if (info) {
-      D.font(ctx, 13, false);
-      var one = countLines(ctx, info, wt.aw - 24) <= 1;
-      wrapMax(ctx, info, 12, iy + (one ? 23 : 15), wt.aw - 24, 15, 13, D.PARCH, 2);
-    }
+    if (low) { drawSheet(ctx, g, kind, top); return; }
 
-    // --- columna derecha ---
-    var gr = ctx.createLinearGradient(x0, 0, W, 0);
-    gr.addColorStop(0, '#4a3520'); gr.addColorStop(1, '#2e2012');
-    ctx.fillStyle = gr; ctx.fillRect(x0, CT, wt.col, H - CT);
-    ctx.fillStyle = D.GOLD; ctx.fillRect(x0, CT - 2, 2, H - CT + 2);
-    UI.zone(x0, CT, wt.col, H - CT, null);
-
-    // héroe
-    var h = g.hero, hy = CT + 8, bx = cx + 64, bw = iw - 64;
-    heroPortrait(ctx, g, cx + 28, hy + 28, 27);
-    fit(ctx, h.def.name + ' · Nv ' + h.level, bx, hy + 18, bw, 14.5, D.PARCH, 'left', true);
-    ctx.fillStyle = '#1e140a'; ctx.fillRect(bx, hy + 27, bw, 8);
-    ctx.fillStyle = D.CELESTE; ctx.fillRect(bx, hy + 27, bw * (h.dead ? 0 : Math.max(0, h.hp / h.maxHp)), 8);
-    ctx.fillStyle = '#1e140a'; ctx.fillRect(bx, hy + 38, bw, 5);
-    ctx.fillStyle = D.GOLD; ctx.fillRect(bx, hy + 38, bw * heroXp(h), 5);
+    // --- héroe: retrato (lo elige), vida, experiencia y habilidad ---
+    var h = g.hero, hx = CHERO.x, hy = H - CHERO.h - 8, bx = hx + 70, hw = CHERO.w - 78;
+    ctx.fillStyle = 'rgba(46,32,18,0.84)'; D.rr(ctx, hx, hy, CHERO.w, CHERO.h, 12); ctx.fill();
+    ctx.strokeStyle = 'rgba(224,174,50,0.75)'; ctx.lineWidth = 1.5; ctx.stroke();
+    UI.zone(hx, hy, CHERO.w, CHERO.h, null);
+    heroPortrait(ctx, g, hx + 35, hy + 34, 27);
+    ctx.fillStyle = D.GOLD; ctx.strokeStyle = D.INK; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(hx + 57, hy + 55, 9.5, 0, TAU); ctx.fill(); ctx.stroke();
+    D.text(ctx, String(h.level), hx + 57, hy + 59.5, 13, D.INK, 'center', true);
+    ctx.fillStyle = '#1e140a'; ctx.fillRect(bx, hy + 8, hw, 8);
+    ctx.fillStyle = D.CELESTE; ctx.fillRect(bx, hy + 8, hw * (h.dead ? 0 : Math.max(0, h.hp / h.maxHp)), 8);
+    ctx.fillStyle = '#1e140a'; ctx.fillRect(bx, hy + 18, hw, 4);
+    ctx.fillStyle = D.GOLD; ctx.fillRect(bx, hy + 18, hw * heroXp(h), 4);
     var hReady = !h.dead && h.abCd <= 0;
-    UI.button(ctx, cx, hy + 62, iw, 36, hReady ? h.def.ability.name : (h.dead ? 'Caído' : Math.ceil(h.abCd) + ' s'), function () { h.useAbility(); }, { size: 14, disabled: !hReady, primary: hReady });
-    if (!h.dead && h.abCd > 0) cooldownOverlay(ctx, cx, hy + 62, iw, 36, h.abCd / h.abilityCd());
+    UI.button(ctx, bx, hy + 27, hw, 35, hReady ? h.def.ability.name : (h.dead ? 'Caído' : Math.ceil(h.abCd) + ' s'), function () { h.useAbility(); }, { size: 14, disabled: !hReady, primary: hReady });
+    if (!h.dead && h.abCd > 0) cooldownOverlay(ctx, bx, hy + 27, hw, 35, h.abCd / h.abilityCd());
 
-    // contexto: torres para construir o acciones de la torre elegida
-    var y = CCTX;
-    if (sel && sel.tower) {
-      var tw = sel.tower;
-      if (tw.level < 3) {
-        if (tw.branch < 0) {
-          upgradeButtonC(ctx, g, tw, 0, cx, y, iw, 74); y += 80;
-          upgradeButtonC(ctx, g, tw, 1, cx, y, iw, 74); y += 80;
-        } else {
-          upgradeButtonC(ctx, g, tw, tw.branch, cx, y, iw, 92); y += 98;
-        }
-      } else {
-        abilityButton(ctx, tw, cx, y, iw, 92); y += 98;
-      }
-      if (tw.key === 'granaderos') {
-        UI.button(ctx, cx, y, iw, 36, 'Punto de reunión', function () { g.mode = g.mode === 'rally' ? null : 'rally'; }, { size: 14, active: g.mode === 'rally' });
-        y += 42;
-      }
-      UI.button(ctx, cx, y, iw - 52, 40, 'Vender +' + tw.sellValue(), function () { g.sell(tw); }, { size: 15, danger: true });
-      UI.button(ctx, cx + iw - 46, y, 46, 40, '×', function () { g.sel = null; g.mode = null; }, { size: 22 });
-    } else {
-      TD.TOWER_KEYS.forEach(function (key, n) { towerButtonC(ctx, g, key, cx, y + n * 58, iw, 52); });
-    }
+    // --- botón «Construir»: abre la bandeja de torres (o la cierra si quedó arriba) ---
+    var cbx = W - CBLD - 8, cby = H - CBLD - 8;
+    CR.build = { x: cbx, y: cby, w: CBLD, h: CBLD };
+    UI.button(ctx, cbx, cby, CBLD, CBLD, '', function () {
+      if (sheetKind(g)) UI.closeSheet(); else { UI.buildOpen = true; g.sel = null; g.mode = null; }
+      TD.Audio.play('click');
+    }, { active: !!kind });
+    iconBuild(ctx, cbx + CBLD / 2, cby + 23);
+    fit(ctx, kind ? 'Cerrar' : 'Construir', cbx + CBLD / 2, cby + CBLD - 9, CBLD - 8, 12.5, D.INK, 'center', true);
 
-    // llamar oleada
-    waveButton(ctx, g, cx, H - 74, iw, 66);
+    if (kind) drawSheet(ctx, g, kind, top);
+    else if (!UI.tut && !UI.modal) infoPill(ctx, g);
   }
 
   /* ---------------- modales de batalla ---------------- */
@@ -1314,7 +1449,12 @@
     var wt = worldLayout(), J = TD.Juice;
     if (C) {
       // el mundo, achicado y recortado a su recuadro; alrededor, la interfaz compacta
-      ctx.fillStyle = '#1c140c'; ctx.fillRect(0, 0, W, H);
+      // (si la pantalla es más apaisada que el mapa, sobran franjas de madera a los costados)
+      ctx.fillStyle = '#2e2012'; ctx.fillRect(0, 0, W, H);
+      if (wt.ax > 1) {
+        ctx.fillStyle = 'rgba(224,174,50,0.55)';
+        ctx.fillRect(wt.ax - 2, wt.ay, 2, wt.ah); ctx.fillRect(wt.ax + wt.aw, wt.ay, 2, wt.ah);
+      }
       ctx.save();
       ctx.beginPath(); ctx.rect(wt.ax, wt.ay, wt.aw, wt.ah); ctx.clip();
       ctx.translate(wt.ox, wt.oy); ctx.scale(wt.f, wt.f);
@@ -1740,6 +1880,7 @@
       // con el dedo se perdona la puntería: el radio de toque nunca baja de unos 24 px reales
       var pad = V.touch ? TD.clamp(24 / (V.css * wt.f) - 30, 0, 28) : 0;
       UI.game.click((x - wt.ox) / wt.f, (y - wt.oy) / wt.f, pad);
+      if (!UI.game.sel && !UI.game.armed) UI.buildOpen = false;      // tocar el mapa vacío cierra la bandeja
     }
   };
 
