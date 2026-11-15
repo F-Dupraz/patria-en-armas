@@ -1436,7 +1436,9 @@
       var w2 = 600, h2 = 310, x2 = W / 2 - w2 / 2, y2 = H / 2 - h2 / 2;
       D.panel(ctx, x2, y2, w2, h2);
       D.text(ctx, 'Derrota', W / 2, y2 + 70, 46, D.PUNZO, 'center', true);
-      D.wrap(ctx, 'El enemigo rompió la línea en la oleada ' + g.waveIdx + ' de ' + lvl.waves.length + '. A reorganizarse: probá otra combinación de torres y mirá qué armadura traen.', W / 2, y2 + 112, w2 - 80, 23, 16, D.INK, 'center', false, true);
+      D.wrap(ctx, g.bossBreach
+        ? '¡' + g.bossBreach + ' cruzó la línea! En ' + g.dm.name + ' si un jefe pasa, la batalla está perdida. Frenalo antes: reforzá el tramo final.'
+        : 'El enemigo rompió la línea en la oleada ' + g.waveIdx + ' de ' + lvl.waves.length + '. A reorganizarse: probá otra combinación de torres y mirá qué armadura traen.', W / 2, y2 + 112, w2 - 80, 23, 16, D.INK, 'center', false, true);
       UI.button(ctx, x2 + 28, y2 + h2 - 84, 120, 50, 'Mapa', function () { UI.go('map'); }, { size: 19 });
       diffChip(ctx, x2 + 160, y2 + h2 - 84, 240, 50, 'Dificultad: ', 17);
       UI.button(ctx, x2 + 412, y2 + h2 - 84, 160, 50, 'Reintentar', function () { UI.startLevel(g.idx); }, { primary: true, size: 21 });
