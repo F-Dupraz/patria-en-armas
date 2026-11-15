@@ -22,12 +22,16 @@
    * y torres) y spd (velocidad de marcha). El balance original del juego es 1/1/1.
    * hpBig es la vida de jefes y barcos: escalan menos porque al río solo llegan
    * las torres de la barranca y esos solares no se pueden multiplicar.
+   * gold es el botín por enemigo caído (los premios de oleada no cambian).
+   * tune nombra un ajuste fino por batalla (ver `hard` en levels.js): otro
+   * multiplicador de vida, calibrado nivel por nivel con un simulador para que
+   * todas las batallas queden igual de exigentes y ninguna imposible.
    * Se elige en Ajustes y se puede cambiar en plena batalla.                     */
   TD.DIFF_KEYS = ['facil', 'normal', 'dificil'];
   TD.DIFFS = {
-    facil:   { name: 'Fácil',   motto: 'Paseo por la Alameda', hp: 0.9, hpBig: 0.9,  dmg: 0.9,  spd: 1.0,  color: '#5cb24a' },
-    normal:  { name: 'Normal',  motto: 'Como Dios manda',      hp: 1.3, hpBig: 1.1,  dmg: 1.15, spd: 1.05, color: '#74acdf' },
-    dificil: { name: 'Difícil', motto: 'A sable y coraje',     hp: 1.5, hpBig: 1.2,  dmg: 1.3,  spd: 1.08, color: '#cf2b2b' }
+    facil:   { name: 'Fácil',   motto: 'Paseo por la Alameda', hp: 0.9,  hpBig: 0.9, dmg: 0.9,  spd: 1.0,  gold: 1,   color: '#5cb24a' },
+    normal:  { name: 'Normal',  motto: 'Como Dios manda',      hp: 1.43, hpBig: 1.2, dmg: 1.2,  spd: 1.05, gold: 1,   color: '#74acdf' },
+    dificil: { name: 'Difícil', motto: 'A sable y coraje',     hp: 1.5,  hpBig: 1.2, dmg: 1.35, spd: 1.08, gold: 0.9, tune: 'hard', color: '#cf2b2b' }
   };
   TD.DEFAULT_DIFF = 'normal';
   // Dificultad elegida en el guardado (siempre devuelve una válida)
@@ -35,15 +39,27 @@
     var k = TD.Save.data.diff;
     return TD.DIFFS[k] ? k : TD.DEFAULT_DIFF;
   };
-  // Multiplicador de vida que le toca a un tipo de enemigo
-  TD.diffHp = function (dm, def) { return (def.boss || def.naval) ? dm.hpBig : dm.hp; };
-  // "Enemigos: +30 % de vida (jefes y barcos +15 %) · +15 % de daño · +5 % de velocidad"
-  TD.diffText = function (key) {
-    var d = TD.DIFFS[key], out = [];
-    function pc(v) { var p = Math.round((v - 1) * 100); return (p > 0 ? '+' : '−') + Math.abs(p) + ' %'; }
-    if (d.hp !== 1) out.push(pc(d.hp) + ' de vida' + (d.hpBig !== d.hp ? ' (jefes y barcos ' + pc(d.hpBig) + ')' : ''));
+  // Ajuste fino de la batalla para esta dificultad (1 si no tiene)
+  TD.diffTune = function (dm, lvl) { return (dm.tune && lvl && lvl[dm.tune]) || 1; };
+  // Multiplicador de vida que le toca a un tipo de enemigo en una batalla
+  TD.diffHp = function (dm, def, lvl) { return ((def.boss || def.naval) ? dm.hpBig : dm.hp) * TD.diffTune(dm, lvl); };
+  // Botín de un enemigo en esta dificultad
+  TD.diffGold = function (dm, def) { return Math.max(1, Math.round(def.gold * dm.gold)); };
+  // "Enemigos: +43 % de vida (jefes y barcos +20 %) · +20 % de daño · +5 % de velocidad".
+  // Con lvl, la vida es la de esa batalla; sin lvl, el rango de toda la campaña.
+  TD.diffText = function (key, lvl) {
+    var d = TD.DIFFS[key], out = [], lo = 1, hi = 1, i, t;
+    function pc(v) { var p = Math.round((v - 1) * 100); return (p >= 0 ? '+' : '−') + Math.abs(p) + ' %'; }
+    if (lvl) lo = hi = TD.diffTune(d, lvl);
+    else if (d.tune) {
+      lo = Infinity; hi = 0;
+      for (i = 0; i < TD.LEVELS.length; i++) { t = TD.diffTune(d, TD.LEVELS[i]); if (t < lo) lo = t; if (t > hi) hi = t; }
+    }
+    if (lo !== hi) out.push('+' + Math.round((d.hp * lo - 1) * 100) + ' a +' + Math.round((d.hp * hi - 1) * 100) + ' % de vida según la batalla');
+    else if (d.hp * lo !== 1) out.push(pc(d.hp * lo) + ' de vida' + (d.hpBig !== d.hp ? ' (jefes y barcos ' + pc(d.hpBig * lo) + ')' : ''));
     if (d.dmg !== 1) out.push(pc(d.dmg) + ' de daño');
     if (d.spd !== 1) out.push(pc(d.spd) + ' de velocidad');
+    if (d.gold !== 1) out.push(pc(d.gold) + ' de botín');
     return 'Enemigos: ' + (out.length ? out.join(' · ') : 'sin cambios');
   };
 

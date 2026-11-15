@@ -210,7 +210,7 @@
   L.onKill = function (e, byHero) {
     var d = e.def;
     L.bump('kills');
-    L.bump('gold', d.gold);
+    L.bump('gold', TD.diffGold(e.g.dm, d));
     if (d.boss) L.bump('bosses');
     if (d.naval) L.bump('ships');
     else if (d.look && d.look.kind === 'cav') L.bump('cav');

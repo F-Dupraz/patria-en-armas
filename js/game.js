@@ -117,7 +117,7 @@
       e = this.enemies[i];
       if (e.dead || e.gone) continue;
       f = e.hp / e.maxHp;
-      e.maxHp = Math.max(1, Math.round(e.def.hp * (this.lvl.hpMul || 1) * TD.diffHp(nd, e.def)));
+      e.maxHp = Math.max(1, Math.round(e.def.hp * (this.lvl.hpMul || 1) * TD.diffHp(nd, e.def, this.lvl)));
       e.hp = Math.max(1, e.maxHp * f);
     }
     this.diff = key; this.dm = nd;
@@ -240,13 +240,13 @@
   };
 
   Game.prototype.onKill = function (e, o) {
-    var gold = e.def.gold;
+    var gold = TD.diffGold(this.dm, e.def);
     this.gold += gold;
     J.coin(this, e.x, e.y - e.h * 0.6, gold);
     J.flushDmg(this, e);
     this.stats.kills++;
     TD.Logros.onKill(e, !!o.hero);
-    this.hero.addXp(o.hero ? gold : gold * 0.2);
+    this.hero.addXp(o.hero ? e.def.gold : e.def.gold * 0.2);      // la experiencia no depende del botín
     if (e.def.naval) {
       this.addFx({ k: 'boom', x: e.x, y: e.y - 8, r: e.r * 1.4, dur: 0.6, fire: true });
       this.addFx({ k: 'splash', x: e.x, y: e.y + 2, r: e.r * 1.5, dur: 0.8 });

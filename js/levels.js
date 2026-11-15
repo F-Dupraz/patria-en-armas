@@ -29,11 +29,19 @@
    *  maxTowers n → usar como máximo n torres
    *  early n     → adelantar n oleadas con 5 s o más de anticipación */
 
+  /* Dificultad por batalla:
+   *  hpMul → vida de los enemigos de esta batalla (vale para las tres dificultades).
+   *  hard  → ajuste fino de «difícil» (ver TD.DIFFS en data.js): multiplica otra vez
+   *          la vida. Sale de un simulador que busca la mejor estrategia posible en
+   *          cada mapa: `hard` deja la batalla cerca del 90 % de lo máximo que esa
+   *          estrategia aguanta (96 % donde normal ya estaba casi en el tope).
+   *          Subirlo un 10 % la pone al borde de lo ganable; bajarlo, la afloja. */
+
   TD.LEVELS = [
     /* =================== ACTO I =================== */
     {
       act: 0, name: 'La Reconquista', year: '1806', place: 'Buenos Aires', theme: 'ciudad',
-      gold: 250, lives: 20, hpMul: 1, tutorial: true, mapPos: [655, 628],
+      gold: 250, lives: 20, hpMul: 1, hard: 2.7, tutorial: true, mapPos: [655, 628],
       paths: [
         { straight: true, pts: [[-40, 190], [300, 190], [300, 430], [660, 430], [660, 210], [980, 210], [980, 500], [1320, 500]] }
       ],
@@ -56,7 +64,7 @@
     },
     {
       act: 0, name: 'Los Corrales de Miserere', year: '1807', place: 'Afueras de Buenos Aires', theme: 'ciudad',
-      gold: 280, lives: 20, hpMul: 1.25, mapPos: [718, 592],
+      gold: 280, lives: 20, hpMul: 1.25, hard: 1.85, mapPos: [718, 592],
       paths: [
         { straight: true, pts: [[-40, 150], [380, 150], [380, 380], [800, 380], [800, 560], [1320, 560]] },
         { straight: true, pts: [[1060, 10], [1060, 210], [800, 210], [800, 380], [800, 560], [1320, 560]] }
@@ -82,7 +90,7 @@
     },
     {
       act: 0, name: 'La Defensa', year: '1807', place: 'Buenos Aires', theme: 'ciudad',
-      gold: 300, lives: 20, hpMul: 1.45, mapPos: [668, 552],
+      gold: 300, lives: 20, hpMul: 1.45, hard: 1.42, mapPos: [668, 552],
       paths: [
         { straight: true, pts: [[-40, 140], [260, 140], [260, 330], [600, 330], [600, 160], [900, 160], [900, 360], [1320, 360]] },
         { straight: true, pts: [[-40, 570], [440, 570], [440, 480], [900, 480], [900, 360], [1320, 360]] }
@@ -111,7 +119,7 @@
     /* =================== ACTO II =================== */
     {
       act: 1, name: 'Tucumán', year: '1812', place: 'San Miguel de Tucumán', theme: 'campo',
-      gold: 320, lives: 20, hpMul: 1.35, mapPos: [432, 172],
+      gold: 320, lives: 20, hpMul: 1.35, hard: 1.3, mapPos: [432, 172],
       paths: [
         { pts: [[-40, 300], [200, 280], [380, 160], [600, 180], [700, 340], [560, 500], [760, 590], [1000, 520], [1080, 340], [1320, 300]] }
       ],
@@ -137,7 +145,7 @@
     },
     {
       act: 1, name: 'San Lorenzo', year: '1813', place: 'Orillas del Paraná', theme: 'costa',
-      gold: 340, lives: 20, hpMul: 1.3, mapPos: [600, 322],
+      gold: 340, lives: 20, hpMul: 1.3, hard: 0.96, mapPos: [600, 322],
       paths: [
         { pts: [[40, 200], [250, 180], [480, 260], [700, 200], [950, 280], [1320, 270]] },
         { pts: [[40, 520], [260, 540], [500, 440], [740, 520], [960, 430], [1120, 330], [1320, 270]] }
@@ -164,7 +172,7 @@
     },
     {
       act: 1, name: 'El Cruce de los Andes', year: '1817', place: 'Cordillera de los Andes', theme: 'montana',
-      gold: 360, lives: 20, hpMul: 1.65, mapPos: [268, 396],
+      gold: 360, lives: 20, hpMul: 1.65, hard: 1, mapPos: [268, 396],
       paths: [
         { pts: [[-40, 560], [240, 560], [420, 470], [240, 360], [400, 240], [640, 250], [760, 400], [640, 540], [860, 600], [1060, 520], [1040, 340], [1180, 200], [1320, 170]] }
       ],
@@ -191,7 +199,7 @@
     },
     {
       act: 1, name: 'Chacabuco', year: '1817', place: 'Cuesta de Chacabuco, Chile', theme: 'campo',
-      gold: 460, lives: 20, hpMul: 1.12, mapPos: [186, 346],
+      gold: 460, lives: 20, hpMul: 1.12, hard: 1, mapPos: [186, 346],
       paths: [
         { pts: [[1320, 180], [1040, 200], [860, 320], [620, 240], [400, 300], [260, 300], [-40, 340]] },
         { pts: [[1320, 540], [1060, 560], [880, 460], [640, 560], [420, 480], [260, 400], [-40, 340]] }
@@ -219,7 +227,7 @@
     },
     {
       act: 1, name: 'Maipú', year: '1818', place: 'Llanos del Maipo, Chile', theme: 'campo',
-      gold: 580, lives: 20, hpMul: 1.1, mapPos: [160, 432],
+      gold: 580, lives: 20, hpMul: 1.1, hard: 1.7, mapPos: [160, 432],
       paths: [
         { pts: [[-40, 160], [240, 200], [460, 340], [660, 360], [880, 300], [1060, 420], [1320, 440]] },
         { pts: [[-40, 580], [220, 540], [440, 400], [660, 360], [860, 470], [1040, 560], [1320, 560]] }
@@ -251,7 +259,7 @@
     /* =================== ACTO III =================== */
     {
       act: 2, name: 'Las cadenas del Paraná', year: '1845', place: 'Vuelta de Obligado', theme: 'rio',
-      gold: 450, lives: 20, hpMul: 1.7, chainX: 430, mapPos: [622, 502],
+      gold: 450, lives: 20, hpMul: 1.55, hard: 1.08, chainX: 430, mapPos: [622, 502],
       slots: [[190, 370], [360, 372], [540, 370], [730, 372], [910, 370], [1090, 372]],
       paths: [
         { pts: [[-40, 160], [260, 180], [460, 290], [720, 250], [940, 170], [1320, 200]] },
@@ -280,7 +288,7 @@
     },
     {
       act: 2, name: 'El desembarco', year: '1845', place: 'Vuelta de Obligado', theme: 'rio',
-      gold: 480, lives: 20, hpMul: 2.1, mapPos: [582, 466],
+      gold: 480, lives: 20, hpMul: 1.75, hard: 0.98, mapPos: [582, 466],
       slots: [[150, 372], [460, 372], [650, 370], [840, 372], [1040, 370]],
       paths: [
         { pts: [[300, 408], [310, 330], [480, 250], [700, 290], [900, 200], [1320, 180]] },
@@ -310,7 +318,7 @@
     },
     {
       act: 2, name: 'Las baterías de la barranca', year: '1845', place: 'Vuelta de Obligado', theme: 'rio',
-      gold: 520, lives: 20, hpMul: 1.35, mapPos: [626, 430],
+      gold: 520, lives: 20, hpMul: 1.35, hard: 1.08, mapPos: [626, 430],
       slots: [[170, 372], [350, 370], [530, 372], [710, 370], [890, 372], [1080, 370]],
       paths: [
         { pts: [[1320, 120], [1040, 160], [900, 300], [660, 300], [520, 170], [300, 190], [160, 300], [-40, 290]] },
@@ -340,7 +348,7 @@
     },
     {
       act: 2, name: 'La flota anglo-francesa', year: '1845', place: 'Vuelta de Obligado', theme: 'rio',
-      gold: 600, lives: 20, hpMul: 1.45, chainX: 760, mapPos: [586, 394],
+      gold: 600, lives: 20, hpMul: 1.32, hard: 0.96, chainX: 760, mapPos: [586, 394],
       slots: [[150, 372], [330, 370], [500, 372], [760, 370], [930, 372], [1100, 370]],
       paths: [
         { pts: [[-40, 150], [240, 170], [420, 290], [660, 260], [860, 320], [1100, 250], [1320, 270]] },
@@ -373,9 +381,11 @@
   ];
 
   /* ---------- Texto y evaluación de objetivos ---------- */
-  TD.objectiveText = function (o) {
+  // En difícil las batallas se ganan con lo justo: la estrella de vidas pide el 60 %.
+  TD.objectiveN = function (o, hard) { return o.t === 'lives' && hard ? Math.round(o.n * 0.6) : o.n; };
+  TD.objectiveText = function (o, hard) {
     switch (o.t) {
-      case 'lives': return 'Terminá con al menos ' + o.n + ' vidas';
+      case 'lives': return 'Terminá con al menos ' + TD.objectiveN(o, hard) + ' vidas';
       case 'noSell': return 'No vendas ninguna torre';
       case 'heroAlive': return 'Que tu héroe no caiga';
       case 'maxTowers': return 'Usá como máximo ' + o.n + ' torres';
@@ -383,9 +393,10 @@
     }
     return '';
   };
+  // Vale la dificultad más baja usada en la batalla (la misma que define la medalla)
   TD.objectiveMet = function (o, g) {
     switch (o.t) {
-      case 'lives': return g.lives >= o.n;
+      case 'lives': return g.lives >= TD.objectiveN(o, g.minDiff === 2);
       case 'noSell': return g.stats.sold === 0;
       case 'heroAlive': return g.stats.heroDeaths === 0;
       case 'maxTowers': return g.stats.maxTowers <= o.n;
