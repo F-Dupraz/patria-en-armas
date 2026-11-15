@@ -23,6 +23,15 @@
   //  · Dispositivo táctil en vertical: el juego se dibuja girado 90°, para jugarlo apaisado
   //    aunque el teléfono tenga la rotación bloqueada.
   function resize() {
+    // El escenario copia el área realmente visible (visualViewport). En iOS, sobre todo con el
+    // juego instalado, el alto del «100 %» a veces queda viejo tras girar el teléfono o al
+    // aparecer las barras de Safari, y la franja de arriba o de abajo terminaba fuera de la pantalla.
+    var vv = window.visualViewport;
+    if (vv && vv.width > 0 && vv.height > 0 && Math.abs((vv.scale || 1) - 1) < 0.01) {
+      stage.style.left = vv.offsetLeft + 'px'; stage.style.top = vv.offsetTop + 'px';
+      stage.style.right = 'auto'; stage.style.bottom = 'auto';
+      stage.style.width = vv.width + 'px'; stage.style.height = vv.height + 'px';
+    }
     var cs = window.getComputedStyle(stage);
     var pl = parseFloat(cs.paddingLeft) || 0, pr = parseFloat(cs.paddingRight) || 0;
     var pt = parseFloat(cs.paddingTop) || 0, pb = parseFloat(cs.paddingBottom) || 0;
@@ -135,11 +144,15 @@
     window.addEventListener('blur', function () { UI.release(); });
     window.addEventListener('pagehide', function () { TD.Logros.flush(); });
     // Al girar el teléfono algunos navegadores avisan antes de tener el tamaño nuevo: se reintenta.
-    var later = function () { resize(); window.setTimeout(resize, 120); window.setTimeout(resize, 450); };
+    var later = function () { resize(); window.setTimeout(resize, 120); window.setTimeout(resize, 450); window.setTimeout(resize, 1000); };
     window.addEventListener('resize', resize);
     window.addEventListener('orientationchange', later);
+    window.addEventListener('pageshow', later);
     document.addEventListener('fullscreenchange', later);
-    if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', resize);
+      window.visualViewport.addEventListener('scroll', resize);
+    }
     // Pausa automática si se oculta la pestaña en plena batalla
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) TD.Logros.flush();

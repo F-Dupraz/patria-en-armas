@@ -9,6 +9,16 @@
 
   /* ---------------- Solar vacío ---------------- */
   D.slot = function (ctx, x, y, hov, t, armed) {
+    // En celular el mapa se ve más chico: el solar lleva un halo que late y un banderín
+    // más grande, para que se distinga dónde se puede construir sin tener que adivinar.
+    var big = TD.View.compact, fk = big ? 1.6 : 1;
+    if (big) {
+      var pu = 0.5 + 0.5 * Math.sin(t * 3 + x * 0.05);
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.16 + 0.12 * pu) + ')';
+      ctx.beginPath(); ctx.ellipse(x, y, 33 + pu * 3, 17 + pu * 1.5, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.55 + 0.35 * pu) + ')'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.ellipse(x, y, 30 + pu * 3, 15.5 + pu * 1.5, 0, 0, TAU); ctx.stroke();
+    }
     ctx.fillStyle = 'rgba(30,20,10,0.22)';
     ctx.beginPath(); ctx.ellipse(x, y + 3, 26, 13, 0, 0, TAU); ctx.fill();
     ctx.fillStyle = hov ? '#d9cdb0' : '#bfb49a';
@@ -17,12 +27,12 @@
     ctx.strokeStyle = 'rgba(107,82,54,0.6)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.ellipse(x, y, 17, 8, 0, 0, TAU); ctx.stroke();
     // estaca con banderín
-    ctx.strokeStyle = '#4a3320'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(x, y + 2); ctx.lineTo(x, y - 20); ctx.stroke();
+    ctx.strokeStyle = '#4a3320'; ctx.lineWidth = 2 * fk;
+    ctx.beginPath(); ctx.moveTo(x, y + 2); ctx.lineTo(x, y - 20 * fk); ctx.stroke();
     ctx.fillStyle = armed ? D.GOLD : D.CELESTE;
     var w = Math.sin(t * 4 + x) * 1.5;
-    ctx.beginPath(); ctx.moveTo(x, y - 20); ctx.lineTo(x + 12, y - 16 + w); ctx.lineTo(x, y - 12); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(40,25,12,0.6)'; ctx.lineWidth = 0.8; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, y - 20 * fk); ctx.lineTo(x + 12 * fk, y - 16 * fk + w); ctx.lineTo(x, y - 12 * fk); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(40,25,12,0.6)'; ctx.lineWidth = 0.8 * fk; ctx.stroke();
     if (hov || armed) {
       ctx.strokeStyle = armed ? 'rgba(224,174,50,0.9)' : 'rgba(255,255,255,0.8)'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.ellipse(x, y, 27 + Math.sin(t * 6) * 1.5, 14 + Math.sin(t * 6), 0, 0, TAU); ctx.stroke();

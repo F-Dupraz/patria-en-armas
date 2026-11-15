@@ -30,7 +30,18 @@ html, body {
   box-sizing: border-box;
   padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
            env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  overflow: hidden;         /* en vertical el canvas se gira y su caja sobresale: que no agrande la página */
   touch-action: none;
+}
+
+/* En pantallas táctiles el juego nunca toca el borde físico: ahí el vidrio se curva, la funda
+   tapa y el sistema se queda con los gestos, así que los botones de arriba quedaban «afuera».
+   Se deja un margen mínimo aunque el teléfono no declare zona segura de ese lado. */
+@media (hover: none) and (pointer: coarse) {
+  #stage {
+    padding: max(env(safe-area-inset-top, 0px), 6px) max(env(safe-area-inset-right, 0px), 6px)
+             max(env(safe-area-inset-bottom, 0px), 6px) max(env(safe-area-inset-left, 0px), 6px);
+  }
 }
 
 #game {
