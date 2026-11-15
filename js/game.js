@@ -117,7 +117,7 @@
       e = this.enemies[i];
       if (e.dead || e.gone) continue;
       f = e.hp / e.maxHp;
-      e.maxHp = Math.max(1, Math.round(e.def.hp * (this.lvl.hpMul || 1) * TD.diffHp(nd, e.def, this.lvl)));
+      e.maxHp = Math.max(1, Math.round(e.def.hp * (this.lvl.hpMul || 1) * TD.diffHp(nd, e.def)));
       e.hp = Math.max(1, e.maxHp * f);
     }
     this.diff = key; this.dm = nd;

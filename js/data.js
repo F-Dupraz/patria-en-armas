@@ -23,15 +23,14 @@
    * hpBig es la vida de jefes y barcos: escalan menos porque al río solo llegan
    * las torres de la barranca y esos solares no se pueden multiplicar.
    * gold es el botín por enemigo caído (los premios de oleada no cambian).
-   * tune nombra un ajuste fino por batalla (ver `hard` en levels.js): otro
-   * multiplicador de vida, calibrado nivel por nivel con un simulador para que
-   * todas las batallas queden igual de exigentes y ninguna imposible.
+   * Son los mismos en las 12 batallas: lo que hace más dura a una batalla que a
+   * otra es su `hpMul` y sus oleadas (levels.js), no la dificultad.
    * Se elige en Ajustes y se puede cambiar en plena batalla.                     */
   TD.DIFF_KEYS = ['facil', 'normal', 'dificil'];
   TD.DIFFS = {
-    facil:   { name: 'Fácil',   motto: 'Paseo por la Alameda', hp: 0.9,  hpBig: 0.9, dmg: 0.9,  spd: 1.0,  gold: 1,   color: '#5cb24a' },
-    normal:  { name: 'Normal',  motto: 'Como Dios manda',      hp: 1.43, hpBig: 1.2, dmg: 1.2,  spd: 1.05, gold: 1,   color: '#74acdf' },
-    dificil: { name: 'Difícil', motto: 'A sable y coraje',     hp: 1.5,  hpBig: 1.2, dmg: 1.35, spd: 1.08, gold: 0.9, tune: 'hard', color: '#cf2b2b' }
+    facil:   { name: 'Fácil',   motto: 'Paseo por la Alameda', hp: 0.9,  hpBig: 0.9,  dmg: 0.9, spd: 1.0,  gold: 1,   color: '#5cb24a' },
+    normal:  { name: 'Normal',  motto: 'Como Dios manda',      hp: 1.46, hpBig: 1.22, dmg: 1.2, spd: 1.05, gold: 1,   color: '#74acdf' },
+    dificil: { name: 'Difícil', motto: 'A sable y coraje',     hp: 1.48, hpBig: 1.24, dmg: 1.4, spd: 1.08, gold: 0.9, color: '#cf2b2b' }
   };
   TD.DEFAULT_DIFF = 'normal';
   // Dificultad elegida en el guardado (siempre devuelve una válida)
@@ -39,24 +38,15 @@
     var k = TD.Save.data.diff;
     return TD.DIFFS[k] ? k : TD.DEFAULT_DIFF;
   };
-  // Ajuste fino de la batalla para esta dificultad (1 si no tiene)
-  TD.diffTune = function (dm, lvl) { return (dm.tune && lvl && lvl[dm.tune]) || 1; };
-  // Multiplicador de vida que le toca a un tipo de enemigo en una batalla
-  TD.diffHp = function (dm, def, lvl) { return ((def.boss || def.naval) ? dm.hpBig : dm.hp) * TD.diffTune(dm, lvl); };
+  // Multiplicador de vida que le toca a un tipo de enemigo
+  TD.diffHp = function (dm, def) { return (def.boss || def.naval) ? dm.hpBig : dm.hp; };
   // Botín de un enemigo en esta dificultad
   TD.diffGold = function (dm, def) { return Math.max(1, Math.round(def.gold * dm.gold)); };
-  // "Enemigos: +43 % de vida (jefes y barcos +20 %) · +20 % de daño · +5 % de velocidad".
-  // Con lvl, la vida es la de esa batalla; sin lvl, el rango de toda la campaña.
-  TD.diffText = function (key, lvl) {
-    var d = TD.DIFFS[key], out = [], lo = 1, hi = 1, i, t;
+  // "Enemigos: +46 % de vida (jefes y barcos +22 %) · +20 % de daño · +5 % de velocidad"
+  TD.diffText = function (key) {
+    var d = TD.DIFFS[key], out = [];
     function pc(v) { var p = Math.round((v - 1) * 100); return (p >= 0 ? '+' : '−') + Math.abs(p) + ' %'; }
-    if (lvl) lo = hi = TD.diffTune(d, lvl);
-    else if (d.tune) {
-      lo = Infinity; hi = 0;
-      for (i = 0; i < TD.LEVELS.length; i++) { t = TD.diffTune(d, TD.LEVELS[i]); if (t < lo) lo = t; if (t > hi) hi = t; }
-    }
-    if (lo !== hi) out.push('+' + Math.round((d.hp * lo - 1) * 100) + ' a +' + Math.round((d.hp * hi - 1) * 100) + ' % de vida según la batalla');
-    else if (d.hp * lo !== 1) out.push(pc(d.hp * lo) + ' de vida' + (d.hpBig !== d.hp ? ' (jefes y barcos ' + pc(d.hpBig * lo) + ')' : ''));
+    if (d.hp !== 1) out.push(pc(d.hp) + ' de vida' + (d.hpBig !== d.hp ? ' (jefes y barcos ' + pc(d.hpBig) + ')' : ''));
     if (d.dmg !== 1) out.push(pc(d.dmg) + ' de daño');
     if (d.spd !== 1) out.push(pc(d.spd) + ' de velocidad');
     if (d.gold !== 1) out.push(pc(d.gold) + ' de botín');
@@ -96,19 +86,19 @@
     artilleria: {
       name: 'Artillería criolla', short: 'Cañón', cost: 125,
       desc: 'Cañón: daño en área, disparo lento. Ideal contra grupos y contra barcos (×1.6).',
-      base: { dmg: 38, rate: 2.6, range: 165, splash: 52, type: 'cont', ball: 1, naval: 1.6 },
+      base: { dmg: 37, rate: 3.0, range: 165, splash: 52, type: 'cont', ball: 1, naval: 1.6 },
       branches: [
-        { key: 'alcance', name: 'Alcance', desc: 'Más rango y balas más grandes.',
+        { key: 'alcance', name: 'Alcance', desc: 'Más rango y balas más grandes; al final recarga más rápido.',
           levels: [
-            { cost: 150, dmg: 60,  range: 205, splash: 58, ball: 1.3 },
-            { cost: 220, dmg: 90,  range: 245, splash: 64, ball: 1.6 },
-            { cost: 300, dmg: 135, range: 290, splash: 72, ball: 2.0 }
+            { cost: 150, dmg: 59,  range: 205, splash: 58, ball: 1.3 },
+            { cost: 220, dmg: 88,  range: 245, splash: 64, ball: 1.6 },
+            { cost: 300, dmg: 132, range: 290, splash: 72, ball: 2.0, rate: 2.75 }
           ] },
         { key: 'fuego', name: 'Fuego', desc: 'Bala roja: quema y abarca más área.',
           levels: [
-            { cost: 160, dmg: 42, type: 'fuego', range: 170, splash: 68, burn: 8,  burnT: 3 },
-            { cost: 230, dmg: 58, type: 'fuego', range: 175, splash: 82, burn: 14, burnT: 4 },
-            { cost: 310, dmg: 80, type: 'fuego', range: 180, splash: 96, burn: 22, burnT: 5 }
+            { cost: 160, dmg: 41, type: 'fuego', range: 170, splash: 68, burn: 8,  burnT: 3 },
+            { cost: 230, dmg: 57, type: 'fuego', range: 175, splash: 82, burn: 14, burnT: 4 },
+            { cost: 310, dmg: 78, type: 'fuego', range: 180, splash: 96, burn: 22, burnT: 5 }
           ] }
       ],
       ability: { name: 'Descarga de metralla', cd: 20, desc: 'Barre un área grande con metralla.' }
@@ -138,19 +128,19 @@
     gauchos: {
       name: 'Gauchos', short: 'Guerrilla', cost: 90,
       desc: 'Guerrilla gaucha: hostiga desde los costados y frena con boleadoras.',
-      base: { dmg: 11, rate: 1.1, range: 150, slow: 0.35, slowT: 2.0, type: 'cont', splash: 0 },
+      base: { dmg: 11, rate: 1.15, range: 150, slow: 0.35, slowT: 2.0, type: 'cont', splash: 0 },
       branches: [
         { key: 'boleadoras', name: 'Boleadoras', desc: 'Frenan más fuerte y por más tiempo.',
           levels: [
             { cost: 100, dmg: 15, slow: 0.45, slowT: 2.8, range: 160 },
             { cost: 150, dmg: 20, slow: 0.55, slowT: 3.6, range: 170, splash: 40 },
-            { cost: 210, dmg: 28, slow: 0.65, slowT: 4.5, range: 180, splash: 55 }
+            { cost: 210, dmg: 28, slow: 0.65, slowT: 4.5, range: 180, splash: 55, rate: 1.1 }
           ] },
         { key: 'emboscada', name: 'Emboscada', desc: 'Aparecen detrás del enemigo: daño extra por la espalda.',
           levels: [
-            { cost: 110, dmg: 36, rate: 1.2, ambush: true, back: 0.4, type: 'perf', slow: 0.2, slowT: 1 },
-            { cost: 170, dmg: 52, rate: 1.1, ambush: true, back: 0.6, type: 'perf', slow: 0.2, slowT: 1 },
-            { cost: 240, dmg: 72, rate: 1.0, ambush: true, back: 0.8, type: 'perf', slow: 0.2, slowT: 1 }
+            { cost: 110, dmg: 36, rate: 1.25, ambush: true, back: 0.4, type: 'perf', slow: 0.2, slowT: 1 },
+            { cost: 170, dmg: 52, rate: 1.15, ambush: true, back: 0.6, type: 'perf', slow: 0.2, slowT: 1 },
+            { cost: 240, dmg: 72, rate: 1.05, ambush: true, back: 0.8, type: 'perf', slow: 0.2, slowT: 1 }
           ] }
       ],
       ability: { name: 'Montonera', cd: 24, desc: 'Invoca varios gauchos a caballo por unos segundos.' }

@@ -1,20 +1,19 @@
 /* Simulador de balance: abre el juego real en Chromium (Playwright) y lo hace jugar a un bot
- * (bot.js), sin dibujar. No forma parte del juego: sirve para calibrar la dificultad.
+ * (bot.js), sin dibujar. No forma parte del juego: sirve para medir la dificultad.
  *
  *   node sim.js base [dificultades]            estrategias genéricas en los 12 niveles
  *   node sim.js search <dif> [gens] [niveles]  busca la mejor estrategia de cada nivel
- *   node sim.js limit <dif> [gens] [niveles]   sube el ajuste fino del nivel hasta que el
- *                                              buscador deja de ganar: ese es su «techo»
+ *   node sim.js limit <dif> [gens] [niveles]   multiplica la vida de esa dificultad hasta que
+ *                                              el buscador deja de ganar: el «techo» del nivel
  *   node sim.js show <dif> <nivel>             repite la mejor estrategia guardada, con detalle
  *
  * Niveles: índices desde 0 separados por coma (ej. 8,9,11). Variables de entorno:
  *   DIFFS='{"dificil":{"dmg":1.5}}'  pisa multiplicadores de TD.DIFFS sin tocar el código
- *   TUNE=hard                        campo del nivel que mueve `limit` (ver levels.js)
  *   DUMP=1 / BESTSEED=1              guarda / reutiliza la mejor estrategia (best-*.json)
  *   STARFIT=1                        la búsqueda también premia las estrellas
  *
- * Los valores `hard` de levels.js son ~0,9 × el techo que da `limit dificil 30`.
- * El techo es un piso de lo ganable: el bot no mueve al héroe a mano ni vende torres. */
+ * El techo es un piso de lo ganable: el bot no mueve al héroe a mano ni vende torres.
+ * Un techo de 1,00 significa que la batalla ya está al límite con los valores del juego. */
 'use strict';
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -111,6 +110,8 @@ async function main() {
     return TD.LEVELS.map(function (l, i) { var g = new TD.Game(i, 'sanmartin'); return { name: l.name, slots: g.slots.length, naval: l.paths.some(function (p) { return p.naval; }) }; });
   });
 
+  const baseDiffs = await pages[0].evaluate(function () { return TD.DIFFS; });
+
   // cola de trabajos repartida entre las páginas
   async function runAll(jobs) {
     const out = new Array(jobs.length); let next = 0;
@@ -120,7 +121,16 @@ async function main() {
     return out;
   }
   let LVL = null;
-  function job(level, diff, gn, seed) { return { level: level, diff: diff, genome: compile(gn), seed: seed, diffs: DIFFS, lvl: LVL, starFit: !!process.env.STARFIT }; }
+  // SCALE multiplica la vida de la dificultad que se está probando (modo `limit`)
+  let SCALE = 1;
+  function job(level, diff, gn, seed) {
+    let d = DIFFS;
+    if (SCALE !== 1) {
+      const b = Object.assign({}, baseDiffs[diff], DIFFS && DIFFS[diff]);
+      d = Object.assign({}, DIFFS); d[diff] = Object.assign({}, b, { hp: b.hp * SCALE, hpBig: b.hpBig * SCALE });
+    }
+    return { level: level, diff: diff, genome: compile(gn), seed: seed, diffs: d, lvl: LVL, starFit: !!process.env.STARFIT };
+  }
   async function evalGenomes(level, diff, gns, seeds) {
     const jobs = [];
     gns.forEach(function (g) { seeds.forEach(function (s) { jobs.push(job(level, diff, g, s)); }); });
@@ -199,13 +209,13 @@ async function main() {
       if (process.env.DUMP) fs.writeFileSync(path.join(__dirname, 'best-' + diff + '-' + L + '.json'), JSON.stringify(r.best.g));
     }
   } else if (mode === 'limit') {
-    // sube el ajuste fino del nivel hasta que el buscador deja de ganar: ese es el techo
-    const diff = process.argv[3] || 'dificil', gens = +(process.argv[4] || 15), TUNE = process.env.TUNE || 'hard';
+    // sube la vida de los enemigos (× la de esa dificultad) hasta que el buscador deja de ganar: ese es el techo
+    const diff = process.argv[3] || 'dificil', gens = +(process.argv[4] || 15);
     const STEP = 1.2, START = +(process.env.START || 1);
     for (const L of levels) {
       let seedG = null, out = [], sc = START, lo = 0, hi = 0, loG = null;
       async function probe(x, big) {
-        LVL = {}; LVL[TUNE] = x;
+        SCALE = x;
         let r = await search(L, diff, big ? gens * 2 : gens, seedG);
         if (r.conf.wins < 4) { // reintento con otra tirada antes de darlo por perdido
           rs = 777 + L; const r2 = await search(L, diff, gens * 2, seedG, 5000 + L);
@@ -221,7 +231,7 @@ async function main() {
       if (lo > 0 && !hi) { sc = lo * STEP; while (sc < +(process.env.MAXSC || 6) && (await probe(sc, false))) sc *= STEP; hi = sc; }
       // un paso de afinado en el medio
       if (lo > 0) { const mid = Math.sqrt(lo * hi); if (!(await probe(mid, false))) hi = mid; }
-      LVL = null;
+      SCALE = 1;
       console.log((L + 1 + ' ' + info[L].name).padEnd(30) + ' techo ' + lo.toFixed(2) + ' (falla en ' + hi.toFixed(2) + ')   ' + out.join('  '));
       if (loG) fs.writeFileSync(path.join(__dirname, 'lim-' + diff + '-' + L + '.json'), JSON.stringify({ lo: lo, g: loG }));
     }
