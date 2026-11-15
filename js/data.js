@@ -23,14 +23,16 @@
    * hpBig es la vida de jefes y barcos: escalan menos porque al río solo llegan
    * las torres de la barranca y esos solares no se pueden multiplicar.
    * gold es el botín por enemigo caído (los premios de oleada no cambian).
+   * bossLoss: si un jefe llega a la barranca se pierde la batalla al instante,
+   * por más vidas que queden (en fácil solo resta sus vidas, como cualquier enemigo).
    * Son los mismos en las 12 batallas: lo que hace más dura a una batalla que a
    * otra es su `hpMul` y sus oleadas (levels.js), no la dificultad.
    * Se elige en Ajustes y se puede cambiar en plena batalla.                     */
   TD.DIFF_KEYS = ['facil', 'normal', 'dificil'];
   TD.DIFFS = {
-    facil:   { name: 'Fácil',   motto: 'Paseo por la Alameda', hp: 0.9,  hpBig: 0.9,  dmg: 0.9, spd: 1.0,  gold: 1,   color: '#5cb24a' },
-    normal:  { name: 'Normal',  motto: 'Como Dios manda',      hp: 1.46, hpBig: 1.22, dmg: 1.2, spd: 1.05, gold: 1,   color: '#74acdf' },
-    dificil: { name: 'Difícil', motto: 'A sable y coraje',     hp: 1.48, hpBig: 1.24, dmg: 1.4, spd: 1.08, gold: 0.9, color: '#cf2b2b' }
+    facil:   { name: 'Fácil',   motto: 'Paseo por la Alameda', hp: 0.9,  hpBig: 0.9,  dmg: 0.9, spd: 1.0,  gold: 1,   color: '#5cb24a', bossLoss: false },
+    normal:  { name: 'Normal',  motto: 'Como Dios manda',      hp: 1.46, hpBig: 1.22, dmg: 1.2, spd: 1.05, gold: 1,   color: '#74acdf', bossLoss: true },
+    dificil: { name: 'Difícil', motto: 'A sable y coraje',     hp: 1.48, hpBig: 1.24, dmg: 1.4, spd: 1.08, gold: 0.9, color: '#cf2b2b', bossLoss: true }
   };
   TD.DEFAULT_DIFF = 'normal';
   // Dificultad elegida en el guardado (siempre devuelve una válida)
@@ -50,6 +52,7 @@
     if (d.dmg !== 1) out.push(pc(d.dmg) + ' de daño');
     if (d.spd !== 1) out.push(pc(d.spd) + ' de velocidad');
     if (d.gold !== 1) out.push(pc(d.gold) + ' de botín');
+    if (d.bossLoss) out.push('si un jefe pasa, perdés');
     return 'Enemigos: ' + (out.length ? out.join(' · ') : 'sin cambios');
   };
 

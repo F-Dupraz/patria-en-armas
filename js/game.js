@@ -63,7 +63,7 @@
     this.sel = null; this.mode = null; this.armed = null;
     this.banner = null; this.endT = 0; this.result = null;
     this.mx = -999; this.my = -999;
-    this.boss = null;
+    this.boss = null; this.bossBreach = null;
     this.dl = [];
 
     // Entradas y salidas visibles de cada camino (para los marcadores)
@@ -275,6 +275,8 @@
     e.gone = true;
     if (e.blocker) { if (e.blocker.target === e) e.blocker.target = null; e.blocker = null; }
     this.lives -= e.def.lives;
+    // normal y difícil: si el jefe cruza, se pierde la batalla aunque sobren vidas
+    if (e.def.boss && this.dm.bossLoss) { this.lives = 0; this.bossBreach = e.def.name; }
     if (this.lives < 0) this.lives = 0;
     this.stats.leaked++;
     if (e.def.naval) this.stats.navalLeaked++;
