@@ -488,11 +488,47 @@
     D.text(ctx, 'N', 760, 116, 13, D.INK, 'center', true);
   }
 
-  // Ruta y nodos de la campaña (half: mitad del lado de la zona de toque)
-  function drawMapNodes(ctx, half) {
+  // Texto centrado por su tinta real y no por la línea de base: Georgia usa números de estilo
+  // antiguo (el 3, el 5 o el 9 bajan de la línea; el 1 y el 2 no), y así ninguno queda corrido.
+  function inkCenter(ctx, s, x, y, size, color) {
+    D.font(ctx, size, true);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = color;
+    var m = ctx.measureText(s), a = m.actualBoundingBoxAscent, d = m.actualBoundingBoxDescent;
+    var l = m.actualBoundingBoxLeft, r = m.actualBoundingBoxRight;
+    if (!(a >= 0 && d > -size)) { a = size * 0.7; d = 0; }
+    if (!(l > -size && r > -size)) { l = 0; r = 0; }
+    ctx.fillText(s, x - (r - l) / 2, y + (a - d) / 2);
+  }
+
+  // Dónde van las tres estrellitas de un nodo: abajo si hay lugar; si no (los nodos apiñados
+  // sobre el Paraná), del lado que quede más lejos de los vecinos.
+  function starSpot(n, r, k) {
+    var c = [[0, r + 9.5 * k], [-(r + 19 * k), 0], [r + 19 * k, 0], [0, -(r + 9.5 * k)]], best = c[0], bestD = -1, i, m;
+    var me = TD.LEVELS[n].mapPos;
+    for (i = 0; i < c.length; i++) {
+      var sx = me[0] + c[i][0], sy = me[1] + c[i][1], dmin = 1e9;
+      for (m = 0; m < TD.LEVELS.length; m++) {
+        if (m === n) continue;
+        var q = TD.LEVELS[m].mapPos, dx = Math.max(0, Math.abs(sx - q[0]) - 16 * k), dy = sy - q[1];
+        dmin = Math.min(dmin, Math.sqrt(dx * dx + dy * dy));
+      }
+      if (i === 0 && dmin >= r + 12 * k) return c[0];   // abajo, si sobra aire
+      if (dmin > bestD) { bestD = dmin; best = c[i]; }  // si no, el lado más despejado
+    }
+    return best;
+  }
+
+  // Ruta y nodos de la campaña.
+  //  half: mitad del lado de la zona de toque de cada nodo (en PC).
+  //  r: radio del círculo (16 en PC; más grande en celular, donde el mapa se achica).
+  //  near: en celular, en vez de un cuadradito por nodo, todo el mapa es zona de toque y se elige
+  //        el nodo más cercano al dedo (hasta near unidades del mapa): imposible errarle por poco.
+  function drawMapNodes(ctx, half, r, near) {
     var i, S = TD.Save.data, t = UI.t;
+    r = r || 16;
+    var k = r / 16;
     // ruta punteada
-    ctx.setLineDash([7, 6]); ctx.strokeStyle = 'rgba(59,42,26,0.75)'; ctx.lineWidth = 2.2;
+    ctx.setLineDash([7 * k, 6 * k]); ctx.strokeStyle = 'rgba(59,42,26,0.75)'; ctx.lineWidth = 2.2 * Math.sqrt(k);
     ctx.beginPath();
     for (i = 0; i < TD.LEVELS.length; i++) {
       var mp = TD.LEVELS[i].mapPos;
@@ -502,22 +538,36 @@
 
     // nodos
     TD.LEVELS.forEach(function (lvl, n) {
-      var x = lvl.mapPos[0], y = lvl.mapPos[1], open = n < S.unlocked, st = S.stars[String(n)] | 0, k;
+      var x = lvl.mapPos[0], y = lvl.mapPos[1], open = n < S.unlocked, st = S.stars[String(n)] | 0, j;
       if (n === UI.mapSel) {
-        ctx.strokeStyle = D.GOLD; ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.arc(x, y, 22 + Math.sin(t * 5) * 2, 0, TAU); ctx.stroke();
+        ctx.strokeStyle = D.GOLD; ctx.lineWidth = 4 * k;
+        ctx.beginPath(); ctx.arc(x, y, r + 6 * k + Math.sin(t * 5) * 2 * k, 0, TAU); ctx.stroke();
       }
-      ctx.fillStyle = 'rgba(30,20,10,0.3)'; ctx.beginPath(); ctx.arc(x + 2, y + 3, 16, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'rgba(30,20,10,0.3)'; ctx.beginPath(); ctx.arc(x + 2 * k, y + 3 * k, r, 0, TAU); ctx.fill();
       ctx.fillStyle = open ? '#f6f2e4' : '#b8ab8c';
-      ctx.beginPath(); ctx.arc(x, y, 16, 0, TAU); ctx.fill();
-      ctx.strokeStyle = open ? ACT_COLORS[lvl.act] : '#7d7054'; ctx.lineWidth = 4; ctx.stroke();
-      ctx.strokeStyle = D.INK; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(x, y, 18, 0, TAU); ctx.stroke();
-      D.text(ctx, String(n + 1), x, y + 6, 17, open ? D.INK : '#7d7054', 'center', true);
+      ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+      ctx.strokeStyle = open ? ACT_COLORS[lvl.act] : '#7d7054'; ctx.lineWidth = 4 * k; ctx.stroke();
+      ctx.strokeStyle = D.INK; ctx.lineWidth = 1.2 * k; ctx.beginPath(); ctx.arc(x, y, r + 2 * k, 0, TAU); ctx.stroke();
+      inkCenter(ctx, String(n + 1), x, y, (n >= 9 ? 15 : 17) * k, open ? D.INK : '#7d7054');
       if (open && S.stars[String(n)] != null) {
-        for (k = 0; k < 3; k++) D.star(ctx, x - 11 + k * 11, y + 26, 5, k < st);
+        var so = starSpot(n, r, k);
+        for (j = 0; j < 3; j++) D.star(ctx, x + so[0] + (j - 1) * 10.5 * k, y + so[1], 5 * k, j < st);
       }
-      UI.zone(x - half, y - half, half * 2, half * 2 + 6, function () { UI.mapSel = n; TD.Audio.play('click'); });
+      if (!near) UI.zone(x - half, y - half, half * 2, half * 2 + 6, function () { UI.mapSel = n; TD.Audio.play('click'); });
     });
+
+    if (near) {
+      // la transformación del mapa achicado se guarda ahora: al tocar ya no está puesta
+      var fs = TF.s, fx = TF.x, fy = TF.y;
+      UI.zone(30, 90, 800, 600, function () {
+        var px = (UI.mx - fx) / fs, py = (UI.my - fy) / fs, best = -1, bd = near * near;
+        TD.LEVELS.forEach(function (lvl, n) {
+          var dx = px - lvl.mapPos[0], dy = py - lvl.mapPos[1] - r * 0.25, d = dx * dx + dy * dy;
+          if (d < bd) { bd = d; best = n; }
+        });
+        if (best >= 0) UI.mapSel = best;
+      });
+    }
   }
 
   function drawMap(ctx) {
@@ -1594,30 +1644,39 @@
 
   /* ---------------- campaña: mapa achicado + ficha del nivel ---------------- */
   function drawMapC(ctx) {
-    var S = TD.Save.data, lc = TD.Logros.total(), x = 10, k2;
+    var S = TD.Save.data, lc = TD.Logros.total(), k2;
     D.parchment(ctx);
-    UI.button(ctx, x, 7, 92, 38, '← Menú', function () { UI.go('menu'); }, { size: 14 }); x += 98;
-    UI.button(ctx, x, 7, 168, 38, 'Héroe: ' + TD.HEROES[heroKey()].name, function () { UI.heroBack = 'map'; UI.go('hero'); }, { size: 14 }); x += 174;
-    UI.button(ctx, x, 7, 118, 38, 'Enciclopedia', function () { UI.go('ency'); }, { size: 14 }); x += 124;
-    diffChip(ctx, x, 7, 146, 38, '', 14); x += 152;
-    UI.button(ctx, x, 7, 94, 38, '', function () { UI.openLogros('map'); });
-    TD.Logros.medal(ctx, x + 19, 32, 0.34, 2, 'granada', true);
-    D.text(ctx, lc.got + ' / ' + lc.total, x + 35, 31, 14, D.INK, 'left', true);
-    if (lc.fresh) badge(ctx, x + 90, 11, lc.fresh);
-    x += 100;
-    UI.button(ctx, x, 7, 86, 38, 'Ajustes', function () { UI.settings = true; }, { size: 14 });
-    D.star(ctx, W - 84, 26, 11, true);
-    D.text(ctx, TD.Save.totalStars() + ' / ' + (TD.LEVELS.length * 3), W - 68, 32, 16, D.INK, 'left', true);
+    // Todo va por dentro del marco doble del pergamino (que se estira con la vista): antes la
+    // barra arrancaba en y = 7, encima del marco, y en el teléfono parecía salirse de la pantalla.
+    var ix = Math.ceil(22 * W / TD.W) + 7, iy = Math.ceil(22 * H / TD.H) + 7, bh = 36, x = ix;
+    UI.button(ctx, x, iy, 88, bh, '← Menú', function () { UI.go('menu'); }, { size: 14 }); x += 94;
+    UI.button(ctx, x, iy, 160, bh, 'Héroe: ' + TD.HEROES[heroKey()].name, function () { UI.heroBack = 'map'; UI.go('hero'); }, { size: 14 }); x += 166;
+    UI.button(ctx, x, iy, 112, bh, 'Enciclopedia', function () { UI.go('ency'); }, { size: 14 }); x += 118;
+    diffChip(ctx, x, iy, 138, bh, '', 14); x += 144;
+    UI.button(ctx, x, iy, 90, bh, '', function () { UI.openLogros('map'); });
+    TD.Logros.medal(ctx, x + 18, iy + bh / 2 + 6, 0.32, 2, 'granada', true);
+    D.text(ctx, lc.got + ' / ' + lc.total, x + 33, iy + bh / 2 + 5, 14, D.INK, 'left', true);
+    if (lc.fresh) badge(ctx, x + 86, iy + 4, lc.fresh);
+    x += 96;
+    UI.button(ctx, x, iy, 80, bh, 'Ajustes', function () { UI.settings = true; }, { size: 14 });
+    // estrellas: pegadas al margen derecho del marco, no al borde de la pantalla
+    var stTxt = TD.Save.totalStars() + ' / ' + (TD.LEVELS.length * 3);
+    D.font(ctx, 16, true);
+    var stW = ctx.measureText(stTxt).width;
+    D.text(ctx, stTxt, W - ix - 2, iy + bh / 2 + 6, 16, D.INK, 'right', true);
+    D.star(ctx, W - ix - 2 - stW - 14, iy + bh / 2, 11, true);
 
     // el mapa clásico (800x600) entra achicado a la izquierda
-    var sm = Math.min(0.7, (W - 30 - 340) / 800), mw = 800 * sm, mh = 600 * sm, my0 = 52 + (420 - mh) / 2;
-    push(ctx, sm, 10 - 30 * sm, my0 - 90 * sm);
+    var top = iy + bh + 7, avH = H - iy - top;
+    var sm = Math.min(avH / 600, (W - 2 * ix - 8 - 330) / 800), mw = 800 * sm, mh = 600 * sm, my0 = top + (avH - mh) / 2;
+    push(ctx, sm, ix - 30 * sm, my0 - 90 * sm);
     drawMapArt(ctx);
-    drawMapNodes(ctx, 32);
+    // nodos de unas 14 unidades de radio en la vista, sea cual sea la escala (sin pisarse entre sí)
+    drawMapNodes(ctx, 0, Math.min(22, 14 / sm), 34 / sm);
     pop(ctx);
 
     // ficha del nivel elegido
-    var n = UI.mapSel, lvl = TD.LEVELS[n], open = n < S.unlocked, px = 20 + mw, py = 52, pw = W - px - 10, ph = 420, mx = px + pw / 2, yy;
+    var n = UI.mapSel, lvl = TD.LEVELS[n], open = n < S.unlocked, px = ix + mw + 8, py = top, pw = W - px - ix, ph = avH, mx = px + pw / 2, yy;
     D.panel(ctx, px, py, pw, ph);
     UI.button(ctx, px + 10, py + 28, 42, 42, '‹', n > 0 ? function () { UI.mapSel = n - 1; } : null, { size: 26, disabled: n <= 0 });
     UI.button(ctx, px + pw - 52, py + 28, 42, 42, '›', n < TD.LEVELS.length - 1 ? function () { UI.mapSel = n + 1; } : null, { size: 26, disabled: n >= TD.LEVELS.length - 1 });
