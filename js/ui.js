@@ -518,7 +518,7 @@
     yy += 26;
     lvl.stars.forEach(function (o) {
       D.star(ctx, px + 38, yy - 5, 8, false);
-      D.text(ctx, TD.objectiveText(o, TD.diffKey() === 'dificil'), px + 56, yy, 15, D.INK, 'left');
+      D.text(ctx, TD.objectiveText(o), px + 56, yy, 15, D.INK, 'left');
       yy += 26;
     });
     yy += 6;
@@ -1149,7 +1149,7 @@
     yy += 26;
     lvl.stars.forEach(function (o) {
       D.star(ctx, x + 54, yy - 5, 8, true);
-      D.text(ctx, TD.objectiveText(o, g.minDiff === 2), x + 72, yy, 16, D.INK, 'left');
+      D.text(ctx, TD.objectiveText(o), x + 72, yy, 16, D.INK, 'left');
       yy += 25;
     });
     UI.button(ctx, x + 60, y + h - 70, 200, 46, 'Volver al mapa', function () { UI.go('map'); }, { size: 17 });
@@ -1227,7 +1227,7 @@
     fit(ctx, live ? 'Rige desde ya. La victoria cuenta con la más baja que usaste.'
       : 'Podés cambiarla cuando quieras, incluso en plena batalla.', x + w - 64, y + 94, 440, 13, D.INK2, 'right', false, true);
     TD.DIFF_KEYS.forEach(function (key, n) { diffCard(ctx, key, x + 64 + n * 216, y + 106, 200, 138); });
-    fit(ctx, TD.diffText(TD.diffKey(), g ? g.lvl : null), W / 2, y + 268, w - 96, 14.5, D.INK, 'center', false, true);
+    fit(ctx, TD.diffText(TD.diffKey()), W / 2, y + 268, w - 96, 14.5, D.INK, 'center', false, true);
 
     D.text(ctx, 'Efectos de sonido', sx, y + 302, 19, D.INK, 'left', true);
     slider(ctx, sx, y + 334, sw, A.sfxVol, A.setSfxVol, function () { A.saveVolumes(); A.play('upgrade'); });
@@ -1281,7 +1281,7 @@
       lvl.stars.forEach(function (o, n) {
         var yy = y + 222 + n * 30, ok = res.met[n];
         D.star(ctx, x + 96, yy - 6, 9, ok);
-        D.text(ctx, TD.objectiveText(o, g.minDiff === 2), x + 116, yy, 17, ok ? D.INK : '#8b7a5c', 'left', ok);
+        D.text(ctx, TD.objectiveText(o), x + 116, yy, 17, ok ? D.INK : '#8b7a5c', 'left', ok);
         D.text(ctx, ok ? 'cumplido' : 'pendiente', x + w - 80, yy, 14, ok ? D.GREEN : '#a0522d', 'right', true);
       });
       if (g.idx === TD.LEVELS.length - 1) {
@@ -1489,7 +1489,7 @@
     yy = py + 172;
     lvl.stars.forEach(function (o) {
       D.star(ctx, px + 30, yy - 5, 7, false);
-      fit(ctx, TD.objectiveText(o, TD.diffKey() === 'dificil'), px + 46, yy, pw - 66, 14, D.INK, 'left');
+      fit(ctx, TD.objectiveText(o), px + 46, yy, pw - 66, 14, D.INK, 'left');
       yy += 23;
     });
     fit(ctx, lvl.waves.length + ' oleadas · ' + lvl.gold + ' de oro inicial · ' + lvl.lives + ' vidas', px + 22, yy + 6, pw - 44, 13, D.INK2, 'left');
@@ -1665,7 +1665,7 @@
     // dificultad
     D.text(ctx, 'Dificultad', lx, y + 76, 17, D.INK, 'left', true);
     TD.DIFF_KEYS.forEach(function (key, n) { diffCardC(ctx, key, lx + n * 134, y + 86, 128, 126); });
-    var yy = wrapMax(ctx, TD.diffText(TD.diffKey(), g ? g.lvl : null), lx, y + 232, lw, 17, 13.5, D.INK, 3, 'left', false, true);
+    var yy = wrapMax(ctx, TD.diffText(TD.diffKey()), lx, y + 232, lw, 17, 13.5, D.INK, 3, 'left', false, true);
     wrapMax(ctx, live ? 'Rige desde ya. La victoria cuenta con la más baja que usaste.'
       : 'Podés cambiarla cuando quieras, incluso en plena batalla.', lx, yy + 3, lw, 16, 12.5, D.INK2, 1, 'left', false, true);
     UI.button(ctx, lx, y + 318, 194, 40, 'Sacudida: ' + (S.data.shake ? 'sí' : 'no'), function () { S.data.shake = !S.data.shake; S.save(); }, { size: 15 });
