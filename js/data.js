@@ -163,10 +163,10 @@
    * cada torre, en las dos ramas a la vez. La primera batalla se juega con las torres
    * básicas y en Maipú, la última del Acto II, ya está todo el arsenal.             */
   TD.UPGRADE_UNLOCK = {
-    granaderos: [1, 3, 5],   // Corrales de Miserere · Tucumán · El Cruce de los Andes
-    gauchos:    [1, 3, 6],   // Corrales de Miserere · Tucumán · Chacabuco
+    granaderos: [1, 3, 6],   // Corrales de Miserere · Tucumán · Chacabuco
+    gauchos:    [1, 3, 7],   // Corrales de Miserere · Tucumán · Maipú
     artilleria: [2, 4, 5],   // La Defensa · San Lorenzo · El Cruce de los Andes
-    tiradores:  [2, 4, 7]    // La Defensa · San Lorenzo · Maipú
+    tiradores:  [2, 4, 5]    // La Defensa · San Lorenzo · El Cruce de los Andes
   };
 
   // Rango de mejora más alto que se puede alcanzar con la torre `key` en el nivel `idx` (0 a 3).
