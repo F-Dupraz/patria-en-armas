@@ -92,7 +92,7 @@
       }
       t = g.towers[st[1]];
       if (!t) return -2;                 // todavía no existe esa torre
-      if (t.level >= 3) return -1;
+      if (t.level >= 3 || (t.locked && t.locked())) return -1;   // al máximo o todavía no habilitada en este nivel
       if (g.gold < t.upgradeCost(st[2])) return 0;
       t.upgrade(st[2]);
       return 1;

@@ -158,6 +158,46 @@
     return d.names.slice(0, 2).join(' / ');
   };
 
+  /* ---------- Desbloqueo de mejoras ----------
+   * Índice del nivel (desde 0) en que se habilita cada rango de mejora (I, II, III) de
+   * cada torre, en las dos ramas a la vez. La primera batalla se juega con las torres
+   * básicas y en Maipú, la última del Acto II, ya está todo el arsenal.             */
+  TD.UPGRADE_UNLOCK = {
+    granaderos: [1, 3, 5],   // Corrales de Miserere · Tucumán · El Cruce de los Andes
+    gauchos:    [1, 3, 6],   // Corrales de Miserere · Tucumán · Chacabuco
+    artilleria: [2, 4, 5],   // La Defensa · San Lorenzo · El Cruce de los Andes
+    tiradores:  [2, 4, 7]    // La Defensa · San Lorenzo · Maipú
+  };
+
+  // Rango de mejora más alto que se puede alcanzar con la torre `key` en el nivel `idx` (0 a 3).
+  TD.upgradeCap = function (key, idx) {
+    var u = TD.UPGRADE_UNLOCK[key], n = 0;
+    while (n < 3 && idx >= u[n]) n++;
+    return n;
+  };
+
+  // Mejoras que se estrenan en el nivel `idx`: [{ key, tier }] con tier de 1 a 3.
+  TD.newUpgrades = function (idx) {
+    var out = [];
+    TD.TOWER_KEYS.forEach(function (key) {
+      TD.UPGRADE_UNLOCK[key].forEach(function (at, n) { if (at === idx) out.push({ key: key, tier: n + 1 }); });
+    });
+    return out;
+  };
+
+  // Texto corto de esas mejoras, con los nombres de las torres del acto: «Patricios I · Gauchos I»
+  TD.newUpgradesText = function (idx) {
+    var act = TD.LEVELS[idx] ? TD.LEVELS[idx].act : null;
+    return TD.newUpgrades(idx).map(function (u) {
+      return TD.towerName(u.key, act) + ' ' + ['I', 'II', 'III'][u.tier - 1];
+    }).join(' · ');
+  };
+
+  // ¿Ya están todas las mejoras de todas las torres en el nivel `idx`?
+  TD.allUpgrades = function (idx) {
+    return TD.TOWER_KEYS.every(function (k) { return TD.upgradeCap(k, idx) >= 3; });
+  };
+
   /* ---------- Enemigos ----------
    * hp, spd (px/s), armor, gold, lives (vidas que resta si pasa),
    * dmg/rate (cuerpo a cuerpo), ranged, elite, boss, naval, look.   */

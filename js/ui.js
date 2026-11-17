@@ -231,7 +231,7 @@
     'Tocá un solar vacío (los círculos de piedra con banderín) para elegir dónde construir.',
     'Ahora elegí una torre en la barra de abajo. Los Tiradores (tecla 3) son un buen comienzo.',
     'Si te alcanza el oro, construí otra defensa. Después tocá «Llamar oleada» (o Espacio) para empezar.',
-    'Cada enemigo abatido da oro. Tocá una torre para mejorarla: cada una tiene dos ramas distintas.',
+    'Cada enemigo abatido da oro: usalo para levantar más defensas. Las mejoras de las torres se habilitan desde la próxima batalla.',
     'Podés adelantar la próxima oleada para ganar oro extra. Tocá a tu héroe y después el mapa para moverlo. P o Esc pausan.'
   ];
 
@@ -240,7 +240,7 @@
     'Tocá un solar vacío (los círculos de piedra con banderín) para elegir dónde construir.',
     'Ahora elegí una torre en la bandeja que se abrió. Los Tiradores son un buen comienzo.',
     'Si te alcanza el oro, construí otra defensa. Después tocá «Llamar oleada», arriba, para empezar.',
-    'Cada enemigo abatido da oro. Tocá una torre para mejorarla: cada una tiene dos ramas distintas.',
+    'Cada enemigo abatido da oro: usalo para levantar más defensas. Las mejoras de las torres se habilitan desde la próxima batalla.',
     'Podés adelantar la próxima oleada para ganar oro extra. Tocá a tu héroe y después el mapa para moverlo.'
   ];
 
@@ -853,7 +853,46 @@
     }
   };
 
+  // Mejora que existe pero todavía no está habilitada en esta batalla: candado y dónde se consigue
+  function lockedUpgrade(ctx, g, tw, b, x, y, w, h) {
+    var br = tw.def.branches[b], at = TD.LEVELS[tw.unlockAt()], px = C ? 10 : 12;
+    D.button(ctx, x, y, w, h, false, { disabled: true });
+    fit(ctx, br.name + ' ' + ['I', 'II', 'III'][tw.level], x + px, y + (C ? 21 : 22), w - 48, C ? 15.5 : 16, '#8b7a5c', 'left', true);
+    padlock(ctx, x + w - 22, y + 16, 1);
+    var msg = 'Se habilita en «' + at.name + '»' + (at.act !== g.lvl.act ? ' (' + TD.ACTS[at.act].name.split(' — ')[0] + ')' : '');
+    wrapMax(ctx, msg, x + px, y + (C ? 38 : 40), w - px - 10, C ? 13.5 : 14, 12, '#8b7a5c', Math.max(1, Math.floor((h - 28) / 14)));
+    UI.zone(x, y, w, h, function () { lockedMsg(g, tw); });
+  }
+
+  function lockedMsg(g, tw) {
+    g.addText(tw.x, tw.y - 80, 'Mejora todavía bloqueada', '#ffd76a', 14);
+    TD.Audio.play('deny');
+  }
+
+  function padlock(ctx, x, y, k) {
+    ctx.save();
+    ctx.translate(x, y); ctx.scale(k, k);
+    ctx.strokeStyle = '#6b5236'; ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.moveTo(-4.5, 1); ctx.lineTo(-4.5, -3); ctx.arc(0, -3, 4.5, Math.PI, 0); ctx.lineTo(4.5, 1); ctx.stroke();
+    ctx.fillStyle = '#a08a62'; ctx.lineWidth = 1.3;
+    D.rr(ctx, -7.5, 0, 15, 11, 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#3b2a1a';
+    ctx.beginPath(); ctx.arc(0, 4.6, 1.8, 0, TAU); ctx.fill();
+    ctx.fillRect(-0.8, 5, 1.6, 3.5);
+    ctx.restore();
+  }
+
+  // Cintita «¡Nueva!» sobre una mejora que se estrena en esta batalla
+  function newTag(ctx, g, tw, x, y, w) {
+    if (g.idx === 0 || TD.UPGRADE_UNLOCK[tw.key][tw.level] !== g.idx) return;
+    var tw2 = 50, tx = x + w - tw2 - 10, ty = y - 8;
+    ctx.fillStyle = D.GOLD; D.rr(ctx, tx, ty, tw2, 16, 8); ctx.fill();
+    ctx.strokeStyle = '#6b4a1a'; ctx.lineWidth = 1; ctx.stroke();
+    D.text(ctx, '¡Nueva!', tx + tw2 / 2, ty + 12, 11, D.INK, 'center', true);
+  }
+
   function upgradeButton(ctx, g, tw, b, x, y, w, h, keyHint) {
+    if (tw.locked()) { lockedUpgrade(ctx, g, tw, b, x, y, w, h); return; }
     var br = tw.def.branches[b], cost = tw.upgradeCost(b), can = g.gold >= cost;
     var hov = UI.hover(x, y, w, h);
     D.button(ctx, x, y, w, h, hov && can, { disabled: !can });
@@ -862,6 +901,7 @@
     D.coin(ctx, x + w - 62, y + 17, 7);
     D.text(ctx, String(cost), x + w - 50, y + 22, 15, can ? D.INK : '#a0522d', 'left', true);
     D.wrap(ctx, br.desc, x + 12, y + 40, w - 22, 14, 12, can ? D.INK2 : '#8b7a5c', 'left');
+    newTag(ctx, g, tw, x, y, w);
     UI.zone(x, y, w, h, function () {
       if (!tw.upgrade(b)) { g.addText(tw.x, tw.y - 80, 'Te falta oro', '#ffb0a0', 14); g.goldDeny = 0.4; }
     });
@@ -1126,12 +1166,14 @@
   }
 
   function upgradeButtonC(ctx, g, tw, b, x, y, w, h) {
+    if (tw.locked()) { lockedUpgrade(ctx, g, tw, b, x, y, w, h); return; }
     var br = tw.def.branches[b], cost = tw.upgradeCost(b), can = g.gold >= cost, hov = UI.hover(x, y, w, h);
     D.button(ctx, x, y, w, h, hov && can, { disabled: !can });
     fit(ctx, br.name + ' ' + ['I', 'II', 'III'][tw.level], x + 10, y + 21, w - 78, 15.5, can ? D.INK : '#8b7a5c', 'left', true);
     D.coin(ctx, x + w - 54, y + 16, 7);
     D.text(ctx, String(cost), x + w - 43, y + 21, 15.5, can ? D.INK : '#a0522d', 'left', true);
     wrapMax(ctx, br.desc, x + 10, y + 38, w - 18, 13.5, 12, can ? D.INK2 : '#8b7a5c', Math.max(1, Math.floor((h - 28) / 14)));
+    newTag(ctx, g, tw, x, y, w);
     UI.zone(x, y, w, h, function () {
       if (!tw.upgrade(b)) { g.addText(tw.x, tw.y - 80, 'Te falta oro', '#ffb0a0', 14); g.goldDeny = 0.4; }
     });
@@ -1317,8 +1359,18 @@
   }
 
   /* ---------------- modales de batalla ---------------- */
+  // Renglón del arsenal de la batalla: qué mejoras se estrenan (o si todavía no hay)
+  function arsenalNote(idx) {
+    var nu = TD.newUpgradesText(idx);
+    if (idx === 0) return { head: 'Arsenal:', text: 'solo torres básicas. Las mejoras llegan en la próxima batalla.' };
+    if (!nu) return null;
+    if (TD.allUpgrades(idx)) return { head: '¡Arsenal completo!', text: 'Se suma ' + nu + ': todas las mejoras habilitadas.' };
+    return { head: 'Nuevas mejoras:', text: nu };
+  }
+
   function drawBrief(ctx, g) {
-    var lvl = g.lvl, w = 640, h = 420, x = W / 2 - w / 2, y = H / 2 - h / 2, yy;
+    var note = arsenalNote(g.idx);
+    var lvl = g.lvl, w = 640, h = 420 + (note ? 36 : 0), x = W / 2 - w / 2, y = H / 2 - h / 2, yy;
     dim(ctx, 0.5);
     D.panel(ctx, x, y, w, h);
     D.text(ctx, TD.ACTS[lvl.act].name, W / 2, y + 40, 16, D.INK2, 'center', true);
@@ -1337,6 +1389,13 @@
       D.text(ctx, TD.objectiveText(o), x + 72, yy, 16, D.INK, 'left');
       yy += 25;
     });
+    if (note) {
+      yy += 8;
+      D.font(ctx, 16, true);
+      var hw = ctx.measureText(note.head).width;
+      D.text(ctx, note.head, x + 44, yy, 16, '#2f5f8f', 'left', true);
+      fit(ctx, note.text, x + 52 + hw, yy, w - 96 - hw, 16, D.INK, 'left');
+    }
     UI.button(ctx, x + 60, y + h - 70, 200, 46, 'Volver al mapa', function () { UI.go('map'); }, { size: 17 });
     UI.button(ctx, x + w - 320, y + h - 70, 260, 46, '¡A las armas!', function () { UI.modal = null; }, { primary: true, size: 22 });
   }
@@ -1473,6 +1532,8 @@
         D.text(ctx, '¡Completaste la campaña! La barranca aguantó.', W / 2, y + 330, 18, '#2f5f8f', 'center', true);
       } else {
         D.text(ctx, 'Vidas: ' + g.lives + ' · Enemigos abatidos: ' + g.stats.kills, W / 2, y + 330, 15, D.INK2, 'center');
+        var nx = TD.newUpgradesText(g.idx + 1);
+        if (nx) fit(ctx, (TD.allUpgrades(g.idx + 1) ? 'Próxima batalla, arsenal completo: ' : 'En la próxima batalla se habilitan: ') + nx, W / 2, y + 358, w - 60, 16, '#2f5f8f', 'center', true);
       }
       var bw = 170, bx = x + 32;
       UI.button(ctx, bx, y + h - 76, bw, 48, 'Mapa', function () { UI.mapSel = Math.min(TD.LEVELS.length - 1, g.idx + 1); UI.go('map'); }, { size: 18 });
@@ -1998,8 +2059,8 @@
       case 'f': g.speed = g.speed === 1 ? 2 : 1; break;
       case 'h': g.hero.useAbility(); break;
       case 'q': if (tw) tw.useAbility(); break;
-      case 'z': if (tw && tw.level < 3) tw.upgrade(tw.branch >= 0 ? tw.branch : 0); break;
-      case 'x': if (tw && tw.level < 3 && tw.branch < 0) tw.upgrade(1); break;
+      case 'z': if (tw && tw.locked()) lockedMsg(g, tw); else if (tw && tw.level < 3) tw.upgrade(tw.branch >= 0 ? tw.branch : 0); break;
+      case 'x': if (tw && tw.locked()) lockedMsg(g, tw); else if (tw && tw.level < 3 && tw.branch < 0) tw.upgrade(1); break;
       case 'r': if (tw && tw.key === 'granaderos') g.mode = g.mode === 'rally' ? null : 'rally'; break;
       default: break;
     }
