@@ -124,7 +124,7 @@
   var KEY = 'patria_en_armas_v1';
 
   function defaults() {
-    return { unlocked: 1, stars: {}, hero: null, sound: true, music: true, sfxVol: 1, musicVol: 1, tutorialDone: false, shake: true, nums: true, diff: 'normal', medals: {}, starsD: {}, ach: {}, stat: {} };
+    return { unlocked: 1, stars: {}, hero: null, sound: true, music: true, sfxVol: 1, musicVol: 1, tutorialDone: false, shake: true, nums: true, diff: 'normal', medals: {}, starsD: {}, ach: {}, stat: {}, endless: { best: 0, kills: 0, hero: null, runs: 0 } };
   }
 
   TD.Save = {
@@ -151,6 +151,13 @@
         if (o.starsD && typeof o.starsD === 'object') d.starsD = o.starsD;
         if (o.ach && typeof o.ach === 'object') d.ach = o.ach;       // condecoraciones ganadas (ver logros.js)
         if (o.stat && typeof o.stat === 'object') d.stat = o.stat;   // contadores acumulados entre batallas
+        if (o.endless && typeof o.endless === 'object') {              // récord del modo Resistencia
+          var en = o.endless;
+          if (typeof en.best === 'number' && en.best > 0) d.endless.best = Math.floor(en.best);
+          if (typeof en.kills === 'number' && en.kills > 0) d.endless.kills = Math.floor(en.kills);
+          if (typeof en.runs === 'number' && en.runs > 0) d.endless.runs = Math.floor(en.runs);
+          if (typeof en.hero === 'string') d.endless.hero = en.hero;
+        }
         this.data = d;
       } catch (e) { /* sin almacenamiento: se juega igual, sin guardar */ }
     },

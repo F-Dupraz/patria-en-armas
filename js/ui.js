@@ -120,7 +120,7 @@
     UI.game = new TD.Game(idx, heroKey());
     UI.screen = 'game'; UI.buildOpen = false; UI.infoKey = '';
     UI.modal = 'brief'; UI.modalT = 0;
-    UI.tut = (TD.LEVELS[idx].tutorial && !TD.Save.data.tutorialDone) ? { step: 0, t: 0 } : null;
+    UI.tut = (TD.levelDef(idx).tutorial && !TD.Save.data.tutorialDone) ? { step: 0, t: 0 } : null;
   }
 
   // Cambia la dificultad (también en plena batalla: rige desde ese mismo instante)
@@ -556,6 +556,8 @@
       if (!near) UI.zone(x - half, y - half, half * 2, half * 2 + 6, function () { UI.mapSel = n; TD.Audio.play('click'); });
     });
 
+    endlessNode(ctx, half, r, k, !!near);
+
     if (near) {
       // la transformación del mapa achicado se guarda ahora: al tocar ya no está puesta
       var fs = TF.s, fx = TF.x, fy = TF.y;
@@ -565,8 +567,74 @@
           var dx = px - lvl.mapPos[0], dy = py - lvl.mapPos[1] - r * 0.25, d = dx * dx + dy * dy;
           if (d < bd) { bd = d; best = n; }
         });
+        var ep = TD.Endless.LEVEL.mapPos, ex = px - ep[0], ey = py - ep[1] - r * 0.25;
+        if (ex * ex + ey * ey < bd) best = EIDX;
         if (best >= 0) UI.mapSel = best;
       });
+    }
+  }
+
+  /* ---------------- Resistencia en el mapa ---------------- */
+  var EIDX = TD.ENDLESS_IDX;
+  var END_COL = '#c8952a', END_INK = '#8a5a12';
+
+  // Nodo del fortín: dorado y con «∞»; gris y punteado mientras está bloqueado
+  function endlessNode(ctx, half, r, k, near) {
+    var p = TD.Endless.LEVEL.mapPos, x = p[0], y = p[1], open = TD.Endless.unlocked(), t = UI.t;
+    if (UI.mapSel === EIDX) {
+      ctx.strokeStyle = D.GOLD; ctx.lineWidth = 4 * k;
+      ctx.beginPath(); ctx.arc(x, y, r + 6 * k + Math.sin(t * 5) * 2 * k, 0, TAU); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(30,20,10,0.3)'; ctx.beginPath(); ctx.arc(x + 2 * k, y + 3 * k, r, 0, TAU); ctx.fill();
+    ctx.fillStyle = open ? '#fff3cf' : '#b8ab8c';
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    if (!open) ctx.setLineDash([4 * k, 3 * k]);
+    ctx.strokeStyle = open ? END_COL : '#7d7054'; ctx.lineWidth = 4 * k; ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = D.INK; ctx.lineWidth = 1.2 * k; ctx.beginPath(); ctx.arc(x, y, r + 2 * k, 0, TAU); ctx.stroke();
+    inkCenter(ctx, '\u221e', x, y, 22 * k, open ? END_INK : '#7d7054');
+    D.text(ctx, 'Resistencia', x, y + r + 17 * k, 13 * k, open ? END_INK : '#7d7054', 'center', true);
+    if (open && TD.Endless.best() > 0) D.text(ctx, 'Récord: ' + TD.Endless.best(), x, y + r + 31 * k, 11 * k, D.INK2, 'center', false, true);
+    if (!near) UI.zone(x - half, y - half, half * 2, half * 2 + 6, function () { UI.mapSel = EIDX; TD.Audio.play('click'); });
+  }
+
+  function oleadas(n) { return n + (n === 1 ? ' oleada' : ' oleadas'); }
+
+  // Ficha de la Resistencia en el mapa. c: diseño compacto (letra y renglones más justos)
+  function endlessPanel(ctx, px, py, pw, ph, c) {
+    var E = TD.Endless, L = E.LEVEL, open = E.unlocked(), best = E.best(), en = TD.Save.data.endless;
+    var mx = px + pw / 2, yy, tx = px + (c ? 22 : 28), tw = pw - (c ? 44 : 56);
+    D.text(ctx, 'Modo especial', mx, py + (c ? 26 : 34), c ? 13 : 15, END_INK, 'center', true);
+    fit(ctx, L.name, mx, py + (c ? 56 : 72), pw - (c ? 120 : 40), c ? 24 : 32, D.INK, 'center', true);
+    fit(ctx, L.place + ' · ' + L.year.toLowerCase(), mx, py + (c ? 76 : 96), pw - (c ? 120 : 40), c ? 13 : 15, D.INK2, 'center', false, true);
+    // récord personal
+    yy = py + (c ? 92 : 112);
+    var rh = c ? 40 : 54;
+    ctx.fillStyle = 'rgba(224,174,50,0.18)'; D.rr(ctx, tx, yy, tw, rh, 10); ctx.fill();
+    ctx.strokeStyle = 'rgba(138,90,18,0.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+    TD.Logros.medal(ctx, tx + (c ? 22 : 30), yy + rh / 2, c ? 0.3 : 0.4, 2, 'torre', best > 0);
+    if (best > 0) {
+      fit(ctx, 'Récord personal: ' + oleadas(best), tx + (c ? 44 : 60), yy + (c ? 18 : 24), tw - (c ? 54 : 70), c ? 15 : 19, D.INK, 'left', true);
+      var hn = en.hero && TD.HEROES[en.hero] ? ' · con ' + TD.HEROES[en.hero].name : '';
+      fit(ctx, en.kills + ' enemigos abatidos' + hn + ' · ' + en.runs + (en.runs === 1 ? ' partida' : ' partidas'), tx + (c ? 44 : 60), yy + (c ? 33 : 44), tw - (c ? 54 : 70), c ? 11.5 : 13, D.INK2, 'left');
+    } else {
+      fit(ctx, open ? 'Todavía sin récord: ¡estrenalo!' : 'Récord personal: —', tx + (c ? 44 : 60), yy + rh / 2 + 5, tw - (c ? 54 : 70), c ? 14 : 17, D.INK2, 'left', true);
+    }
+    yy += rh + (c ? 22 : 30);
+    if (!c) yy = wrapMax(ctx, '—' + L.talk, tx, yy - 4, tw, 20, 14.5, D.INK, 3, 'left', false, true) + 14;
+    D.text(ctx, 'Cómo funciona', tx, yy, c ? 14 : 16, D.INK, 'left', true);
+    yy += c ? 4 : 8;
+    (c ? L.rules.slice(0, 3) : L.rules).forEach(function (line) {
+      ctx.fillStyle = END_COL; ctx.beginPath(); ctx.arc(tx + 5, yy + (c ? 11 : 13), 3, 0, TAU); ctx.fill();
+      yy = wrapMax(ctx, line, tx + 16, yy + (c ? 15 : 18), tw - 16, c ? 15 : 18, c ? 12.5 : 14, D.INK, 2) - (c ? 4 : 6);
+    });
+    var by = py + ph - (c ? 100 : 122), bh = c ? 50 : 56;
+    if (open) {
+      UI.button(ctx, px + (c ? 20 : 50), by, pw - (c ? 40 : 100), bh, '¡A resistir!', function () { UI.startLevel(EIDX); }, { primary: true, size: c ? 23 : 24 });
+      fit(ctx, 'Héroe: ' + TD.HEROES[heroKey()].name + ' · ' + L.gold + ' de oro · ' + L.lives + ' vidas', mx, by + bh + (c ? 22 : 28), pw - 40, c ? 12.5 : 14, D.INK2, 'center', false, true);
+    } else {
+      UI.button(ctx, px + (c ? 20 : 50), by, pw - (c ? 40 : 100), bh, 'Bloqueado', null, { disabled: true, size: c ? 20 : 22 });
+      fit(ctx, 'Se desbloquea al ganar ' + TD.LEVELS[E.lastActII()].name + ' (fin del Acto II).', mx, by + bh + (c ? 22 : 28), pw - 40, c ? 12.5 : 14, D.INK2, 'center', false, true);
     }
   }
 
@@ -592,6 +660,7 @@
     drawMapNodes(ctx, 22);
 
     // panel del nivel elegido
+    if (UI.mapSel === EIDX) { D.panel(ctx, 850, 90, 400, 600); endlessPanel(ctx, 850, 90, 400, 600, false); return; }
     var lvl = TD.LEVELS[UI.mapSel], px = 850, py = 90, pw = 400, ph = 600, k2;
     var open = UI.mapSel < S.unlocked;
     D.panel(ctx, px, py, pw, ph);
@@ -914,6 +983,13 @@
       var gw = ctx.measureText(String(Math.floor(g.gold))).width;
       D.text(ctx, '+' + g.goldPlus, 136 + gw, 27 - (0.9 - g.goldPlusT) * 6, 14, '#ffe9a8', 'left', true);
       ctx.restore();
+    }
+    if (g.endless) {
+      // Resistencia: oleada actual y récord (dorado si se está batiendo ahora)
+      D.text(ctx, 'Oleada ' + g.waveIdx, 230, 22, 17, D.PARCH, 'left', true);
+      var rb = Math.max(g.record, g.cleared);
+      D.text(ctx, g.newRecord ? '¡Récord! ' + oleadas(rb) : 'Récord: ' + (rb > 0 ? oleadas(rb) : '—'), 230, 37, 11.5, g.newRecord ? '#ffd76a' : '#d8c8a8', 'left', true);
+      return;
     }
     D.text(ctx, 'Oleada ' + g.waveIdx + ' / ' + g.lvl.waves.length, 230, 29, 19, D.PARCH, 'left', true);
   }
@@ -1319,6 +1395,7 @@
   /* ---------------- modales de batalla ---------------- */
   function drawBrief(ctx, g) {
     var lvl = g.lvl, w = 640, h = 420, x = W / 2 - w / 2, y = H / 2 - h / 2, yy;
+    if (g.endless) { drawBriefEndless(ctx, g, w, h, x, y); return; }
     dim(ctx, 0.5);
     D.panel(ctx, x, y, w, h);
     D.text(ctx, TD.ACTS[lvl.act].name, W / 2, y + 40, 16, D.INK2, 'center', true);
@@ -1341,15 +1418,37 @@
     UI.button(ctx, x + w - 320, y + h - 70, 260, 46, '¡A las armas!', function () { UI.modal = null; }, { primary: true, size: 22 });
   }
 
+  function drawBriefEndless(ctx, g, w, h, x, y) {
+    var L = g.lvl, best = TD.Endless.best(), yy;
+    dim(ctx, 0.5);
+    D.panel(ctx, x, y, w, h);
+    D.text(ctx, 'Modo especial', W / 2, y + 40, 16, END_INK, 'center', true);
+    D.text(ctx, L.name, W / 2, y + 86, 40, D.INK, 'center', true);
+    D.text(ctx, L.place + ' · ' + L.year.toLowerCase(), W / 2, y + 112, 17, D.INK2, 'center', false, true);
+    ctx.strokeStyle = 'rgba(59,42,26,0.4)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x + 50, y + 130); ctx.lineTo(x + w - 50, y + 130); ctx.stroke();
+    D.text(ctx, L.speaker + ':', x + 44, y + 160, 16, D.INK, 'left', true);
+    yy = wrapMax(ctx, '—' + L.talk, x + 44, y + 184, w - 88, 22, 16.5, D.INK, 3, 'left', false, true);
+    yy += 8;
+    TD.Logros.medal(ctx, x + 62, yy + 6, 0.4, 2, 'torre', best > 0);
+    fit(ctx, best > 0 ? 'Récord personal: ' + oleadas(best) : 'Todavía sin récord: la primera marca la ponés vos.', x + 92, yy + 12, w - 140, 18, D.INK, 'left', true);
+    yy += 40;
+    fit(ctx, 'Arranca en Fácil, en la oleada 3 es Normal y en la 8, Difícil; después sube de a poco.', x + 44, yy, w - 88, 14.5, D.INK2, 'left', false, true);
+    fit(ctx, 'Un jefe cada 10 oleadas. La dificultad de Ajustes no cuenta acá.', x + 44, yy + 22, w - 88, 14.5, D.INK2, 'left', false, true);
+    UI.button(ctx, x + 60, y + h - 70, 200, 46, 'Volver al mapa', function () { UI.mapSel = EIDX; UI.go('map'); }, { size: 17 });
+    UI.button(ctx, x + w - 320, y + h - 70, 260, 46, '¡A resistir!', function () { UI.modal = null; }, { primary: true, size: 22 });
+  }
+
   function drawPause(ctx, g) {
     var w = 420, h = 372, x = W / 2 - w / 2, y = H / 2 - h / 2;
     dim(ctx, 0.55);
     D.panel(ctx, x, y, w, h);
     D.text(ctx, 'Pausa', W / 2, y + 62, 40, D.INK, 'center', true);
     UI.button(ctx, x + 60, y + 92, w - 120, 50, 'Continuar', UI.togglePause, { primary: true, size: 21 });
-    UI.button(ctx, x + 60, y + 154, w - 120, 44, 'Reiniciar batalla', function () { UI.startLevel(g.idx); }, { size: 18 });
+    UI.button(ctx, x + 60, y + 154, w - 120, 44, g.endless ? 'Empezar de nuevo' : 'Reiniciar batalla', function () { UI.startLevel(g.idx); }, { size: 18 });
     UI.button(ctx, x + 60, y + 208, w - 120, 44, 'Ajustes', function () { UI.settings = true; }, { size: 18 });
-    UI.button(ctx, x + 60, y + 262, w - 120, 44, 'Volver al mapa', function () { UI.go('map'); }, { size: 18 });
+    UI.button(ctx, x + 60, y + 262, w - 120, 44, 'Volver al mapa', function () { if (g.endless) UI.mapSel = EIDX; UI.go('map'); }, { size: 18 });
+    if (g.endless) fit(ctx, 'El récord ya está guardado: superaste ' + oleadas(g.cleared) + '.', W / 2, y + h - (C ? 22 : 48), w - 40, 13, D.INK2, 'center', false, true);
     if (!C) D.text(ctx, 'P o Esc para volver al combate', W / 2, y + h - 26, 14, D.INK2, 'center', false, true);
   }
 
@@ -1409,7 +1508,8 @@
     if (TD.PWA.canFullscreen()) UI.button(ctx, x + w - 216, y + 24, 192, 36, fsLabel(), TD.PWA.toggleFullscreen, { size: 15 });
 
     D.text(ctx, 'Dificultad', x + 64, y + 94, 19, D.INK, 'left', true);
-    fit(ctx, live ? 'Rige desde ya. La victoria cuenta con la más baja que usaste.'
+    fit(ctx, live && g.endless ? 'En la Resistencia no cuenta: la dificultad la marca la oleada.'
+      : live ? 'Rige desde ya. La victoria cuenta con la más baja que usaste.'
       : 'Podés cambiarla cuando quieras, incluso en plena batalla.', x + w - 64, y + 94, 440, 13, D.INK2, 'right', false, true);
     TD.DIFF_KEYS.forEach(function (key, n) { diffCard(ctx, key, x + 64 + n * 216, y + 106, 200, 138); });
     fit(ctx, TD.diffText(TD.diffKey()), W / 2, y + 268, w - 96, 14.5, D.INK, 'center', false, true);
@@ -1448,6 +1548,7 @@
 
   function drawEnd(ctx, g) {
     var res = g.result || { win: false, stars: 0, met: [] }, lvl = g.lvl, i;
+    if (res.endless) { drawEndEndless(ctx, g, res); return; }
     dim(ctx, 0.6);
     if (res.win) {
       var w = 620, h = 460, x = W / 2 - w / 2, y = H / 2 - h / 2;
@@ -1493,6 +1594,27 @@
       diffChip(ctx, x2 + 160, y2 + h2 - 84, 240, 50, 'Dificultad: ', 17);
       UI.button(ctx, x2 + 412, y2 + h2 - 84, 160, 50, 'Reintentar', function () { UI.startLevel(g.idx); }, { primary: true, size: 21 });
     }
+  }
+
+  // Fin de la Resistencia: siempre termina cayendo; lo que importa es hasta dónde se llegó
+  function drawEndEndless(ctx, g, res) {
+    var w = 600, h = 340, x = W / 2 - w / 2, y = H / 2 - h / 2, pop = TD.clamp((UI.modalT - 0.25) * 4, 0, 1);
+    dim(ctx, 0.6);
+    D.panel(ctx, x, y, w, h);
+    D.text(ctx, res.record ? '¡Nuevo récord!' : 'Cayó el fortín', W / 2, y + 62, 42, res.record ? END_INK : D.PUNZO, 'center', true);
+    if (res.record && UI.starSnd < 1 && pop > 0) { UI.starSnd = 1; TD.Audio.play('star', 2); }
+    ctx.save();
+    ctx.translate(W / 2, y + 128); ctx.scale(0.6 + 0.4 * pop, 0.6 + 0.4 * pop);
+    TD.Logros.medal(ctx, -150, -8, 0.5, 2, 'torre', res.waves > 0);
+    D.text(ctx, 'Resististe ' + oleadas(res.waves), 20, 4, 30, D.INK, 'center', true);
+    ctx.restore();
+    var sub = res.record
+      ? (res.prev > 0 ? 'Tu marca anterior era de ' + oleadas(res.prev) + '.' : 'Es tu primera marca: ahora a superarla.')
+      : 'Récord personal: ' + oleadas(res.best) + (res.best - res.waves > 0 ? ' (te faltaron ' + (res.best - res.waves + 1) + ' para batirlo)' : '') + '.';
+    fit(ctx, sub, W / 2, y + 178, w - 60, 17, D.INK2, 'center', false, true);
+    fit(ctx, 'Llegaste a la oleada ' + g.waveIdx + ' · ' + g.stats.kills + ' enemigos abatidos · ' + g.towers.length + ' torres en pie', W / 2, y + 206, w - 60, 14.5, D.INK2, 'center');
+    UI.button(ctx, x + 40, y + h - 84, 200, 50, 'Mapa', function () { UI.mapSel = EIDX; UI.go('map'); }, { size: 19 });
+    UI.button(ctx, x + w - 280, y + h - 84, 240, 50, 'Otra vez', function () { UI.startLevel(g.idx); }, { primary: true, size: 21 });
   }
 
   function drawGame(ctx) {
@@ -1677,10 +1799,20 @@
     pop(ctx);
 
     // ficha del nivel elegido
-    var n = UI.mapSel, lvl = TD.LEVELS[n], open = n < S.unlocked, px = ix + mw + 8, py = top, pw = W - px - ix, ph = avH, mx = px + pw / 2, yy;
+    var n = UI.mapSel, px = ix + mw + 8, py = top, pw = W - px - ix, ph = avH, mx = px + pw / 2, yy;
+    // ‹ › recorren las 12 batallas y, al final, la Resistencia
+    var last = TD.LEVELS.length - 1;
+    if (n === EIDX) {
+      D.panel(ctx, px, py, pw, ph);
+      UI.button(ctx, px + 10, py + 28, 42, 42, '‹', function () { UI.mapSel = last; }, { size: 26 });
+      UI.button(ctx, px + pw - 52, py + 28, 42, 42, '›', null, { size: 26, disabled: true });
+      endlessPanel(ctx, px, py, pw, ph, true);
+      return;
+    }
+    var lvl = TD.LEVELS[n], open = n < S.unlocked;
     D.panel(ctx, px, py, pw, ph);
     UI.button(ctx, px + 10, py + 28, 42, 42, '‹', n > 0 ? function () { UI.mapSel = n - 1; } : null, { size: 26, disabled: n <= 0 });
-    UI.button(ctx, px + pw - 52, py + 28, 42, 42, '›', n < TD.LEVELS.length - 1 ? function () { UI.mapSel = n + 1; } : null, { size: 26, disabled: n >= TD.LEVELS.length - 1 });
+    UI.button(ctx, px + pw - 52, py + 28, 42, 42, '›', function () { UI.mapSel = n < last ? n + 1 : EIDX; }, { size: 26 });
     D.text(ctx, TD.ACTS[lvl.act].name, mx, py + 26, 13, ACT_COLORS[lvl.act] === '#74acdf' ? '#2f6ea8' : ACT_COLORS[lvl.act], 'center', true);
     fit(ctx, (n + 1) + '. ' + lvl.name, mx, py + 56, pw - 120, 22, D.INK, 'center', true);
     fit(ctx, lvl.year + ' · ' + lvl.place, mx, py + 76, pw - 120, 13, D.INK2, 'center', false, true);
@@ -1888,7 +2020,8 @@
     D.text(ctx, 'Dificultad', lx, y + 76, 17, D.INK, 'left', true);
     TD.DIFF_KEYS.forEach(function (key, n) { diffCardC(ctx, key, lx + n * 134, y + 86, 128, 126); });
     var yy = wrapMax(ctx, TD.diffText(TD.diffKey()), lx, y + 232, lw, 17, 13.5, D.INK, 3, 'left', false, true);
-    wrapMax(ctx, live ? 'Rige desde ya. La victoria cuenta con la más baja que usaste.'
+    wrapMax(ctx, live && g.endless ? 'En la Resistencia no cuenta: la dificultad la marca la oleada.'
+      : live ? 'Rige desde ya. La victoria cuenta con la más baja que usaste.'
       : 'Podés cambiarla cuando quieras, incluso en plena batalla.', lx, yy + 3, lw, 16, 12.5, D.INK2, 1, 'left', false, true);
     UI.button(ctx, lx, y + 318, 194, 40, 'Sacudida: ' + (S.data.shake ? 'sí' : 'no'), function () { S.data.shake = !S.data.shake; S.save(); }, { size: 15 });
     UI.button(ctx, lx + 202, y + 318, 194, 40, 'Números de daño: ' + (S.data.nums ? 'sí' : 'no'), function () { S.data.nums = !S.data.nums; S.save(); }, { size: 14 });
@@ -1978,8 +2111,8 @@
         else if (UI.screen === 'map') UI.go('menu');
         else if (UI.screen === 'ency') UI.go(TD.Save.data.hero ? 'map' : 'menu');
         else if (UI.screen === 'logros') UI.go(UI.logBack);
-      } else if ((k === 'Enter' || k === ' ') && UI.screen === 'map' && UI.mapSel < TD.Save.data.unlocked) {
-        UI.startLevel(UI.mapSel);
+      } else if ((k === 'Enter' || k === ' ') && UI.screen === 'map') {
+        if (UI.mapSel === EIDX ? TD.Endless.unlocked() : UI.mapSel < TD.Save.data.unlocked) UI.startLevel(UI.mapSel);
       }
       return;
     }
