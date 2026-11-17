@@ -5,12 +5,14 @@
  * La dificultad no sale de Ajustes sino del número de oleada:
  *   oleada 1 = Fácil · oleada 3 = Normal · oleada 8 = Difícil
  * (entre medio se interpola, sin saltos). Desde la 8 la vida de los
- * enemigos sube un poco por oleada, siempre en línea recta (+7 % de la
- * de Difícil por oleada): la 13 es Difícil +35 %, la 20 es +84 %.
+ * enemigos sube un poco por oleada, siempre en línea recta (+9 % de la
+ * de Difícil por oleada): la 13 es Difícil +45 %, la 20 es +108 %.
  * Nada crece de forma exponencial. El tamaño de las oleadas (vida total
  * de la tropa, sin contar la dificultad) crece por tramos rectos: la
- * pendiente sube en la 15 y en la 25, cuando el jugador ya tiene la
- * economía y los solares para bancarlo (medido con tools/balance/endless.js).
+ * pendiente sube en la 20 y en la 25, cuando el jugador ya tiene la
+ * economía y los solares para bancarlo. Cada 5 oleadas, un jefe (5 vidas si pasa).
+ * Calibrado con tools/balance/endless.js: un jugador común cae entre la 12 y la
+ * 20; uno que llena y mejora todo y frena a los jefes pasa la 40 y roza la 55.
  * ============================================================ */
 (function () {
   'use strict';
@@ -20,16 +22,18 @@
 
   var E = TD.Endless = {
     KNOTS: [[1, 0], [3, 1], [8, 2]],  // [oleada, escalón]: 0 fácil, 1 normal, 2 difícil
-    HP_SLOPE: 0.07,                   // vida extra por oleada desde la 8 (sobre la de Difícil)
+    HP_SLOPE: 0.09,                   // vida extra por oleada desde la 8 (sobre la de Difícil)
     BOSS_SLOPE: 0.5,                  // los jefes crecen a la mitad de ese ritmo: no tienen que ser un muro
     DMG_SLOPE: 0.02, DMG_CAP: 1.6,    // daño extra por oleada (tope: +60 %)
     SPD_SLOPE: 0.008, SPD_CAP: 1.3,   // velocidad extra por oleada (tope: +30 %)
     BUDGET0: 540, BUDGET_SLOPE: 150,  // "presupuesto" de la oleada: vida base total de su tropa
-    BUDGET_SLOPE2: 300, BUDGET_KNEE: 15,   // + esto por oleada desde la 15 (ya hay economía para bancarlo)
+    BUDGET_SLOPE2: 300, BUDGET_KNEE: 20,   // + esto por oleada desde la 20 (ya hay economía para bancarlo)
     BUDGET_SLOPE3: 450, BUDGET_KNEE3: 25,  // y esto desde la 25 (con los solares llenos y mejorados)
+    ELITE_EVERY: 20,                  // un élite más por grupo cada tantas oleadas
     GROUP_MAX: 36,                    // tope de enemigos por grupo
-    BOSS_LIVES: 3,                    // vidas que cuesta un jefe que pasa (en la campaña, 10): no es un muro
-    BOSS_EVERY: 10
+    BOSS_LIVES: 5,                    // vidas que cuesta un jefe que pasa (en la campaña, 10)
+    BOSS_EVERY: 5,
+    BOSS_HP0: 200, BOSS_HP_SLOPE: 80,  // vida base del jefe: 200 + 80 por oleada (la 5: 600, la 20: 1.800)
   };
 
   /* ---------- el nivel ---------- */
@@ -50,7 +54,7 @@
       'Oleadas sin fin, cada una un poco más dura que la anterior.',
       'Arranca en Fácil, en la oleada 3 ya es Normal y en la 8, Difícil. Después sigue subiendo de a poco.',
       'La dificultad de Ajustes no cuenta acá: la marca la oleada.',
-      'Cada 10 oleadas llega un jefe. Tu récord es la cantidad de oleadas superadas.'
+      'Cada 5 oleadas llega un jefe: si pasa, perdés 5 vidas. Tu récord es la cantidad de oleadas superadas.'
     ]
   };
 
@@ -166,7 +170,7 @@
       share = i === kinds - 1 ? sBudget : sBudget / (kinds - i) * (0.8 + r() * 0.4);
       hp = TD.ENEMIES[sp.t].hp;
       n = TD.clamp(Math.round(share / hp), 1, E.GROUP_MAX);
-      if (sp.elite) n = Math.min(n, 1 + Math.floor(w / 15));
+      if (sp.elite) n = Math.min(n, 1 + Math.floor(w / E.ELITE_EVERY));
       sBudget -= n * hp; spent += n * hp;
       groups.push(group(sp.t, n, Math.round(delay), nextPath()));
       delay += 3 + r() * 4;
@@ -184,8 +188,10 @@
     }
 
     if (boss) {
-      var bi = Math.min(BOSSES.length - 1, w / E.BOSS_EVERY - 1);
-      groups.push({ type: BOSSES[bi], n: 1, gap: 1, delay: Math.round(delay + 4), path: 0 });
+      // el aspecto va cambiando, pero la vida la marca la oleada (sin saltos de un jefe a otro)
+      var bi = Math.min(BOSSES.length - 1, w / E.BOSS_EVERY - 1), bt = BOSSES[bi];
+      groups.push({ type: bt, n: 1, gap: 1, delay: Math.round(delay + 4), path: w / E.BOSS_EVERY % 2 ? 0 : 1,
+        hpMul: (E.BOSS_HP0 + E.BOSS_HP_SLOPE * w) / TD.ENEMIES[bt].hp });
     }
 
     return { pause: boss ? 18 : 15, bonus: Math.min(120, 20 + 3 * w), groups: groups, boss: boss };

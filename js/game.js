@@ -54,7 +54,7 @@
       this.record = TD.Endless.best();                    // récord al empezar
       this.newRecord = false;
     }
-    this.spawnDm = null;
+    this.spawnDm = null; this.spawnHpMul = 1;
     TD.curFlag = TD.flagFor(lvl);
     this.paths = lvl.paths.map(function (p) {
       return new TD.Path(p.straight ? p.pts : TD.smooth(p.pts, 12), !!p.naval);
@@ -348,7 +348,7 @@
     }
     for (i = 0; i < wv.groups.length; i++) {
       g = wv.groups[i];
-      this.spawners.push({ type: g.type, n: g.n, gap: g.gap, t: g.delay, path: g.path, wi: this.waveIdx, dm: this.dm });
+      this.spawners.push({ type: g.type, n: g.n, gap: g.gap, t: g.delay, path: g.path, wi: this.waveIdx, dm: this.dm, hpMul: g.hpMul || 1 });
       total += g.n;
       dur = Math.max(dur, g.delay + (g.n - 1) * g.gap);
     }
@@ -447,9 +447,9 @@
       s = this.spawners[i];
       s.t -= dt;
       while (s.t <= 0 && s.n > 0) {
-        this.spawnDm = s.dm;
+        this.spawnDm = s.dm; this.spawnHpMul = s.hpMul;
         this.spawnEnemy(s.type, s.path, s.wi, 0);
-        this.spawnDm = null;
+        this.spawnDm = null; this.spawnHpMul = 1;
         s.n--;
         s.t += s.gap;
       }

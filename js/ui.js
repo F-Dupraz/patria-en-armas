@@ -624,7 +624,7 @@
     if (!c) yy = wrapMax(ctx, '—' + L.talk, tx, yy - 4, tw, 20, 14.5, D.INK, 3, 'left', false, true) + 14;
     D.text(ctx, 'Cómo funciona', tx, yy, c ? 14 : 16, D.INK, 'left', true);
     yy += c ? 4 : 8;
-    (c ? L.rules.slice(0, 3) : L.rules).forEach(function (line) {
+    (c ? [L.rules[0], L.rules[1], L.rules[3]] : L.rules).forEach(function (line) {      // en celular, sin la de Ajustes
       ctx.fillStyle = END_COL; ctx.beginPath(); ctx.arc(tx + 5, yy + (c ? 11 : 13), 3, 0, TAU); ctx.fill();
       yy = wrapMax(ctx, line, tx + 16, yy + (c ? 15 : 18), tw - 16, c ? 15 : 18, c ? 12.5 : 14, D.INK, 2) - (c ? 4 : 6);
     });
@@ -1434,7 +1434,7 @@
     fit(ctx, best > 0 ? 'Récord personal: ' + oleadas(best) : 'Todavía sin récord: la primera marca la ponés vos.', x + 92, yy + 12, w - 140, 18, D.INK, 'left', true);
     yy += 40;
     fit(ctx, 'Arranca en Fácil, en la oleada 3 es Normal y en la 8, Difícil; después sube de a poco.', x + 44, yy, w - 88, 14.5, D.INK2, 'left', false, true);
-    fit(ctx, 'Un jefe cada 10 oleadas. La dificultad de Ajustes no cuenta acá.', x + 44, yy + 22, w - 88, 14.5, D.INK2, 'left', false, true);
+    fit(ctx, 'Un jefe cada 5 oleadas (si pasa, 5 vidas menos). La dificultad de Ajustes no cuenta acá.', x + 44, yy + 22, w - 88, 14.5, D.INK2, 'left', false, true);
     UI.button(ctx, x + 60, y + h - 70, 200, 46, 'Volver al mapa', function () { UI.mapSel = EIDX; UI.go('map'); }, { size: 17 });
     UI.button(ctx, x + w - 320, y + h - 70, 260, 46, '¡A resistir!', function () { UI.modal = null; }, { primary: true, size: 22 });
   }

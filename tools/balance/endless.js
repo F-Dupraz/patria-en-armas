@@ -15,13 +15,16 @@ const BOT = fs.readFileSync(path.join(__dirname, 'bot.js'), 'utf8');
 
 const COMP = [['tiradores', 0], ['granaderos', 0], ['artilleria', 1], ['gauchos', 0], ['tiradores', 1], ['artilleria', 0], ['granaderos', 1], ['tiradores', 0], ['gauchos', 1], ['artilleria', 1]];
 
+// CASUAL=1: un jugador común: usa 10 solares como mucho y mejora cada torre solo dos veces
 function plan(nSlots) {
+  const casual = !!process.env.CASUAL, rounds = casual ? 1 : 3;
+  if (casual) nSlots = Math.min(nSlots, 10);
   const out = [], built = [];
   for (let i = 0; i < nSlots; i += 3) {
     for (let k = i; k < Math.min(nSlots, i + 3); k++) { const c = COMP[k % COMP.length]; out.push(['B', c[0], 0, 0]); built.push(c[1]); }
     for (let k = 0; k < built.length; k++) out.push(['U', k, built[k]]);
   }
-  for (let r = 0; r < 3; r++) for (let k = 0; k < built.length; k++) out.push(['U', k, built[k]]);
+  for (let r = 0; r < rounds; r++) for (let k = 0; k < built.length; k++) out.push(['U', k, built[k]]);
   return out;
 }
 
