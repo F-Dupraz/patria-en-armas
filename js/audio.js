@@ -270,6 +270,16 @@
       tone(660, 0.11, 'square', 0.2, 0, 0.26); tone(220, 0.25, 'square', 0.22, 110, 0.4);
     },
     levelup: function () { tone(523, 0.1, 'triangle', 0.3); tone(659, 0.1, 'triangle', 0.3, 0, 0.1); tone(784, 0.1, 'triangle', 0.3, 0, 0.2); tone(1047, 0.25, 'triangle', 0.3, 0, 0.3); },
+    // zumbido de la manga de langostas (arg: volumen relativo)
+    langostas: function (v) {
+      // un susurro de alas: ráfagas cortas de ruido que suben y se van
+      var t0 = A.ctx.currentTime, n = 18, i, env;
+      v = v == null ? 1 : v;
+      for (i = 0; i < n; i++) {
+        env = Math.sin(Math.PI * (i + 0.5) / n);
+        nz(A.sfx, t0 + i * 0.085, 0.13, 0.11 * v * env, 2800 + Math.random() * 1600, 'bandpass', 0, 1.6);
+      }
+    },
     splash: function () { noise(0.3, 0.3, 1800, 'bandpass', 0, 500); },
 
     // Inicio de oleada: redoble de caja y toque de corneta

@@ -632,6 +632,8 @@
     // efectos al ras del suelo (caídos, quemaduras, barcos hundiéndose)
     for (i = 0; i < this.fx.length; i++) if (this.fx[i].ground) D.fx(ctx, this.fx[i]);
 
+    if (this.clima && this.clima.drawBelow) this.clima.drawBelow(ctx);
+
     // entidades ordenadas por profundidad
     dl.length = 0;
     for (i = 0; i < this.towers.length; i++) { this.towers[i].sy = this.towers[i].y + 6; dl.push(this.towers[i]); }
