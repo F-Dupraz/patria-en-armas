@@ -28,6 +28,7 @@ var ARCHIVOS = [
   'js/logros.js',
   'js/entities.js',
   'js/towers.js',
+  'js/clima.js',
   'js/game.js',
   'js/ui.js',
   'js/main.js',

@@ -163,7 +163,7 @@
       ]
     },
     {
-      act: 1, name: 'El Cruce de los Andes', year: '1817', place: 'Cordillera de los Andes', theme: 'montana',
+      act: 1, name: 'El Cruce de los Andes', year: '1817', place: 'Cordillera de los Andes', theme: 'montana', clima: 'niebla',
       gold: 360, lives: 20, hpMul: 1.65, mapPos: [268, 396],
       paths: [
         { pts: [[-40, 560], [240, 560], [420, 470], [240, 360], [400, 240], [640, 250], [760, 400], [640, 540], [860, 600], [1060, 520], [1040, 340], [1180, 200], [1320, 170]] }
@@ -182,7 +182,7 @@
       ],
       stars: [{ t: 'lives', n: 14 }, { t: 'maxTowers', n: 9 }, { t: 'early', n: 3 }],
       speaker: 'Arriero',
-      talk: 'El sendero es angosto y el aire, finito. Acá cada curva es una trampa: aprovechala.',
+      talk: 'El sendero es angosto y el aire, finito. Y ojo: con cada oleada baja más la niebla. Ubicá bien las torres, que alrededor de ellas siempre se ve.',
       info: [
         'Entre enero y febrero de 1817 el Ejército de los Andes, organizado en Cuyo, cruzó la cordillera hacia Chile.',
         'Unos 5.000 hombres, con mulas, caballos y artillería, avanzaron por varios pasos —los principales, Los Patos y Uspallata— a más de 4.000 metros de altura.',
