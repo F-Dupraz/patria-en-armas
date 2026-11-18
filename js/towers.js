@@ -69,9 +69,16 @@
   };
 
   /* ---------- Mejoras ---------- */
-  // Costo de la próxima mejora en la rama b (o en la ya elegida). null si está al máximo.
+  // Rango de mejora más alto habilitado en esta batalla (se desbloquean a lo largo de la campaña)
+  Tower.prototype.cap = function () { return TD.upgradeCap(this.key, this.g.idx); };
+  // La próxima mejora existe pero todavía no está habilitada en esta batalla
+  Tower.prototype.locked = function () { return this.level < 3 && this.level >= this.cap(); };
+  // Nivel (índice) en que se habilita la próxima mejora
+  Tower.prototype.unlockAt = function () { return TD.UPGRADE_UNLOCK[this.key][Math.min(2, this.level)]; };
+
+  // Costo de la próxima mejora en la rama b (o en la ya elegida). null si está al máximo o bloqueada.
   Tower.prototype.upgradeCost = function (b) {
-    if (this.level >= 3) return null;
+    if (this.level >= 3 || this.locked()) return null;
     var br = this.branch >= 0 ? this.branch : b;
     return this.def.branches[br].levels[this.level].cost;
   };
