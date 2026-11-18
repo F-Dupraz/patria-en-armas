@@ -42,10 +42,19 @@
   };
 
   function Game(idx, heroKey) {
-    var lvl = TD.LEVELS[idx], self = this, i;
-    this.idx = idx; this.lvl = lvl;
+    var endless = idx === TD.ENDLESS_IDX, self = this, i;
+    var lvl = endless ? TD.Endless.makeLevel() : TD.LEVELS[idx];
+    this.idx = idx; this.lvl = lvl; this.endless = endless;
     this.diff = TD.diffKey(); this.dm = TD.DIFFS[this.diff];
     this.minDiff = TD.DIFF_KEYS.indexOf(this.diff);      // la más baja usada en la batalla: define la medalla
+    if (endless) {
+      // Resistencia: la dificultad la marca la oleada, no Ajustes
+      this.dm = TD.Endless.diff(1); this.diff = this.dm.key;
+      this.cleared = 0;                                   // oleadas superadas (el récord)
+      this.record = TD.Endless.best();                    // récord al empezar
+      this.newRecord = false;
+    }
+    this.spawnDm = null; this.spawnHpMul = 1;
     TD.curFlag = TD.flagFor(lvl);
     this.paths = lvl.paths.map(function (p) {
       return new TD.Path(p.straight ? p.pts : TD.smooth(p.pts, 12), !!p.naval);
@@ -112,7 +121,7 @@
    * porcentaje de vida y el daño y la velocidad nuevos rigen desde ya.     */
   Game.prototype.setDiff = function (key) {
     var nd = TD.DIFFS[key], i, e, f;
-    if (!nd || key === this.diff) return;
+    if (!nd || key === this.diff || this.endless) return;
     for (i = 0; i < this.enemies.length; i++) {
       e = this.enemies[i];
       if (e.dead || e.gone) continue;
@@ -236,6 +245,23 @@
         this.setBanner('Oleada ' + (wi + 1) + ' superada: +' + bonus + ' de oro');
         if (wi + 1 < this.lvl.waves.length) TD.Audio.play('waveclear');
       }
+      if (this.endless && this.state === 'running') this.endlessCleared();
+    }
+  };
+
+  /* Resistencia: una oleada más superada. El récord se guarda en el momento
+   * (si se sale a mitad de partida o se cierra la pestaña, no se pierde). */
+  Game.prototype.endlessCleared = function () {
+    var S = TD.Save, en = S.data.endless;
+    this.cleared++;
+    if (this.cleared > (en.best | 0)) {
+      en.best = this.cleared; en.kills = this.stats.kills; en.hero = this.hero.key;
+      S.save();
+      if (!this.newRecord && this.record > 0) {
+        this.setBanner('¡Nuevo récord personal! ' + this.cleared + ' oleadas');
+        TD.Audio.play('star', 2);
+      }
+      this.newRecord = true;
     }
   };
 
@@ -274,7 +300,7 @@
     if (e.gone || e.dead) return;
     e.gone = true;
     if (e.blocker) { if (e.blocker.target === e) e.blocker.target = null; e.blocker = null; }
-    this.lives -= e.def.lives;
+    this.lives -= (this.endless && e.def.boss) ? TD.Endless.BOSS_LIVES : e.def.lives;
     // normal y difícil: si el jefe cruza, se pierde la batalla aunque sobren vidas
     if (e.def.boss && this.dm.bossLoss) { this.lives = 0; this.bossBreach = e.def.name; }
     if (this.lives < 0) this.lives = 0;
@@ -303,8 +329,14 @@
   Game.prototype.callWave = function (auto) {
     if (!this.canCall()) return false;
     var i, total = 0, dur = 0, wv = this.lvl.waves[this.waveIdx], g;
+    if (this.endless) {
+      // la oleada nueva trae su propia dificultad; los enemigos que ya están conservan su vida
+      this.dm = TD.Endless.diff(this.waveIdx + 1);
+      this.diff = this.dm.key;
+    }
     if (this.state === 'prep') {
       this.state = 'running';
+      if (this.endless) { TD.Save.data.endless.runs = (TD.Save.data.endless.runs | 0) + 1; TD.Save.save(); }
     } else if (!auto) {
       var bonus = this.earlyBonus();
       if (bonus > 0) {
@@ -316,12 +348,24 @@
     }
     for (i = 0; i < wv.groups.length; i++) {
       g = wv.groups[i];
-      this.spawners.push({ type: g.type, n: g.n, gap: g.gap, t: g.delay, path: g.path, wi: this.waveIdx });
+      this.spawners.push({ type: g.type, n: g.n, gap: g.gap, t: g.delay, path: g.path, wi: this.waveIdx, dm: this.dm, hpMul: g.hpMul || 1 });
       total += g.n;
       dur = Math.max(dur, g.delay + (g.n - 1) * g.gap);
     }
     this.waveLeft[this.waveIdx] = total;
     this.waveIdx++;
+    if (this.endless) {
+      // Resistencia: siempre hay una oleada más (y la siguiente ya se puede anunciar)
+      TD.Endless.ensure(this.lvl, this.waveIdx);
+      this.nextTimer = dur + wv.pause;
+      var w = this.waveIdx, tp = TD.Endless.tier(w), tq = TD.Endless.tier(w - 1);
+      if (wv.boss) this.setBanner('Oleada ' + w + ': ¡llega un jefe!');
+      else if (tp >= 1 && tq < 1) this.setBanner('Oleada ' + w + ': el enemigo aprieta (Normal)');
+      else if (tp >= 2 && tq < 2) this.setBanner('Oleada ' + w + ': ¡ahora es Difícil!');
+      else this.setBanner('Oleada ' + w);
+      TD.Audio.play(wv.boss ? 'wavefinal' : 'wave');
+      return true;
+    }
     this.nextTimer = this.waveIdx < this.lvl.waves.length ? dur + wv.pause : 0;
     this.setBanner(this.waveIdx === this.lvl.waves.length ? '¡Última oleada!' : 'Oleada ' + this.waveIdx);
     TD.Audio.play(this.waveIdx === this.lvl.waves.length ? 'wavefinal' : 'wave');
@@ -403,7 +447,9 @@
       s = this.spawners[i];
       s.t -= dt;
       while (s.t <= 0 && s.n > 0) {
+        this.spawnDm = s.dm; this.spawnHpMul = s.hpMul;
         this.spawnEnemy(s.type, s.path, s.wi, 0);
+        this.spawnDm = null; this.spawnHpMul = 1;
         s.n--;
         s.t += s.gap;
       }
@@ -471,6 +517,13 @@
     if (!win) {
       this.state = 'lost';
       this.result = { win: false, stars: 0, met: [] };
+      if (this.endless) {
+        this.result.endless = true;
+        this.result.waves = this.cleared;
+        this.result.prev = this.record;
+        this.result.best = TD.Endless.best();
+        this.result.record = this.newRecord;
+      }
       TD.Logros.flush();
       TD.Audio.play('lose');
       return;

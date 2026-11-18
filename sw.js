@@ -22,6 +22,7 @@ var ARCHIVOS = [
   'js/audio.js',
   'js/data.js',
   'js/levels.js',
+  'js/endless.js',
   'js/draw.js',
   'js/art.js',
   'js/juice.js',
