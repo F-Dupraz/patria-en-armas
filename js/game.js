@@ -96,6 +96,7 @@
     this.soldiers.push(this.hero);
 
     this.bg = D.background(this);
+    this.clima = TD.Clima ? TD.Clima.create(this) : null;     // temática del nivel (niebla, …)
   }
 
   /* ---------------- utilidades ---------------- */
@@ -465,6 +466,7 @@
       if (!e.dead && !e.gone) e.update(dt);
     }
     for (i = 0; i < this.projs.length; i++) this.projs[i].update(dt);
+    if (this.clima) this.clima.update(dt);
 
     // limpieza
     compact(this.enemies);
@@ -683,6 +685,8 @@
     // efectos al ras del suelo (caídos, quemaduras, barcos hundiéndose)
     for (i = 0; i < this.fx.length; i++) if (this.fx[i].ground) D.fx(ctx, this.fx[i]);
 
+    if (this.clima && this.clima.drawBelow) this.clima.drawBelow(ctx);
+
     // entidades ordenadas por profundidad
     dl.length = 0;
     for (i = 0; i < this.towers.length; i++) { this.towers[i].sy = this.towers[i].y + 6; dl.push(this.towers[i]); }
@@ -690,6 +694,16 @@
     for (i = 0; i < this.enemies.length; i++) { e = this.enemies[i]; if (!e.dead && !e.gone) { e.sy = e.y; dl.push(e); } }
     dl.sort(byY);
     for (i = 0; i < dl.length; i++) dl[i].draw(ctx);
+
+    // temática: la niebla tapa el mapa y las tropas, pero no la interfaz del alcance
+    if (this.clima) {
+      this.clima.draw(ctx);
+      if (rng) {
+        ctx.setLineDash([8, 6]); ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(rng.x, rng.y - 8, rng.r, 0, TAU); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
 
     // selección
     if (this.sel && this.sel.hero && !this.hero.dead) {
