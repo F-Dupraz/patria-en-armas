@@ -48,14 +48,17 @@
     A.noiseBuf = buf;
   };
 
+  // Reanuda el contexto si quedó frenado. iOS agrega el estado «interrupted» (llamada,
+  // cambio de aplicación, pantalla bloqueada), así que se pregunta por «no está corriendo».
+  function wake() {
+    var c = A.ctx, p;
+    if (!c || c.state === 'running' || c.state === 'closed' || !c.resume || document.hidden) return;
+    try { p = c.resume(); if (p && p.catch) p.catch(function () { /* se reintenta en el próximo gesto */ }); } catch (e) { /* ignorado */ }
+  }
+
   // Se llama en el primer gesto del usuario (los navegadores lo exigen).
   A.init = function () {
-    if (A.ctx) {
-      if (A.ctx.state === 'suspended' && A.ctx.resume && !document.hidden) {
-        try { A.ctx.resume(); } catch (e) { /* ignorado */ }
-      }
-      return;
-    }
+    if (A.ctx) { wake(); return; }
     try {
       var AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;
@@ -65,7 +68,8 @@
       document.addEventListener('visibilitychange', function () {
         if (!A.ctx) return;
         try {
-          if (document.hidden) A.ctx.suspend(); else A.ctx.resume();
+          if (document.hidden) { A.ctx.suspend(); if (silentEl) silentEl.pause(); }
+          else { wake(); session(); }
         } catch (e) { /* ignorado */ }
       });
       applyTrack();
@@ -73,6 +77,68 @@
       A.ctx = null;
     }
   };
+
+  /* ---------- desbloqueo del audio (iPhone y iPad) ---------- */
+  // Safari en iOS solo deja arrancar el sonido dentro de un gesto «completo»: al LEVANTAR el
+  // dedo (touchend, pointerup, click), no al apoyarlo (pointerdown). Como el juego reacciona
+  // al apoyar, el contexto nacía frenado y nunca más se reanudaba: iOS quedaba mudo.
+  // Por eso A.unlock se engancha a esos eventos en todo el documento, y queda enganchado:
+  // iOS vuelve a frenar el audio cada vez que la aplicación pasa a segundo plano.
+  var silentEl = null;
+
+  // WAV mudo de medio segundo armado en memoria (el juego no usa archivos de sonido)
+  function silentWav() {
+    var rate = 8000, n = rate / 2, b = new Uint8Array(44 + n), v = new DataView(b.buffer), i, out = '';
+    function str(o, t) { for (var k = 0; k < t.length; k++) b[o + k] = t.charCodeAt(k); }
+    str(0, 'RIFF'); v.setUint32(4, 36 + n, true); str(8, 'WAVEfmt '); v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate, true);
+    v.setUint16(32, 1, true); v.setUint16(34, 8, true); str(36, 'data'); v.setUint32(40, n, true);
+    for (i = 44; i < b.length; i++) b[i] = 128;                 // 8 bits sin signo: 128 es silencio
+    for (i = 0; i < b.length; i++) out += String.fromCharCode(b[i]);
+    return 'data:audio/wav;base64,' + window.btoa(out);
+  }
+
+  // Con el interruptor lateral en «silencio», iOS calla el WebAudio porque lo toma por sonido
+  // ambiente. Si el juego tiene el sonido o la música activados, se le avisa que es reproducción
+  // («playback»); en los iOS sin esa API se logra lo mismo con un <audio> mudo en bucle.
+  // Poné MUTE_SWITCH en true para que el juego vuelva a respetar el interruptor.
+  var MUTE_SWITCH = false;
+  function session() {
+    var want = !MUTE_SWITCH && (A.on || A.music) && !document.hidden, p;
+    try {
+      if (navigator.audioSession) { navigator.audioSession.type = want ? 'playback' : 'auto'; return; }
+    } catch (e) { /* ignorado */ }
+    if (!TD.PWA || !TD.PWA.ios) return;
+    try {
+      if (!want) { if (silentEl) silentEl.pause(); return; }
+      if (!silentEl) {
+        silentEl = document.createElement('audio');
+        silentEl.setAttribute('playsinline', '');
+        silentEl.setAttribute('x-webkit-airplay', 'deny');
+        silentEl.preload = 'auto'; silentEl.loop = true; silentEl.src = silentWav();
+      }
+      if (silentEl.paused) { p = silentEl.play(); if (p && p.catch) p.catch(function () { /* fuera de un gesto: se reintenta */ }); }
+    } catch (e) { /* ignorado */ }
+  }
+
+  A.unlock = function () {
+    var c, src, stuck;
+    A.init();
+    c = A.ctx;
+    if (!c) return;
+    stuck = c.state !== 'running';
+    session();
+    wake();
+    if (stuck) {
+      // un búfer mudo termina de «destrabar» la salida en los Safari más viejos
+      try { src = c.createBufferSource(); src.buffer = c.createBuffer(1, 1, 22050); src.connect(c.destination); src.start(0); } catch (e) { /* ignorado */ }
+    }
+  };
+
+  ['touchend', 'pointerup', 'click', 'keydown'].forEach(function (name) {
+    try { document.addEventListener(name, A.unlock, { capture: true, passive: true }); }
+    catch (e) { document.addEventListener(name, A.unlock, true); }
+  });
 
   /* ---------- síntesis básica ---------- */
 
@@ -204,6 +270,16 @@
       tone(660, 0.11, 'square', 0.2, 0, 0.26); tone(220, 0.25, 'square', 0.22, 110, 0.4);
     },
     levelup: function () { tone(523, 0.1, 'triangle', 0.3); tone(659, 0.1, 'triangle', 0.3, 0, 0.1); tone(784, 0.1, 'triangle', 0.3, 0, 0.2); tone(1047, 0.25, 'triangle', 0.3, 0, 0.3); },
+    // zumbido de la manga de langostas (arg: volumen relativo)
+    langostas: function (v) {
+      // un susurro de alas: ráfagas cortas de ruido que suben y se van
+      var t0 = A.ctx.currentTime, n = 18, i, env;
+      v = v == null ? 1 : v;
+      for (i = 0; i < n; i++) {
+        env = Math.sin(Math.PI * (i + 0.5) / n);
+        nz(A.sfx, t0 + i * 0.085, 0.13, 0.11 * v * env, 2800 + Math.random() * 1600, 'bandpass', 0, 1.6);
+      }
+    },
     splash: function () { noise(0.3, 0.3, 1800, 'bandpass', 0, 500); },
 
     // Inicio de oleada: redoble de caja y toque de corneta
@@ -490,6 +566,7 @@
     A.on = !!v;
     TD.Save.data.sound = A.on;
     TD.Save.save();
+    session();
     applyTrack();
   };
 
@@ -497,6 +574,7 @@
     A.music = !!v;
     TD.Save.data.music = A.music;
     TD.Save.save();
+    session();
     applyTrack();
   };
 

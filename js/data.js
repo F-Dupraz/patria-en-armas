@@ -23,14 +23,16 @@
    * hpBig es la vida de jefes y barcos: escalan menos porque al río solo llegan
    * las torres de la barranca y esos solares no se pueden multiplicar.
    * gold es el botín por enemigo caído (los premios de oleada no cambian).
+   * bossLoss: si un jefe llega a la barranca se pierde la batalla al instante,
+   * por más vidas que queden (en fácil solo resta sus vidas, como cualquier enemigo).
    * Son los mismos en las 12 batallas: lo que hace más dura a una batalla que a
    * otra es su `hpMul` y sus oleadas (levels.js), no la dificultad.
    * Se elige en Ajustes y se puede cambiar en plena batalla.                     */
   TD.DIFF_KEYS = ['facil', 'normal', 'dificil'];
   TD.DIFFS = {
-    facil:   { name: 'Fácil',   motto: 'Paseo por la Alameda', hp: 0.9,  hpBig: 0.9,  dmg: 0.9, spd: 1.0,  gold: 1,   color: '#5cb24a' },
-    normal:  { name: 'Normal',  motto: 'Como Dios manda',      hp: 1.46, hpBig: 1.22, dmg: 1.2, spd: 1.05, gold: 1,   color: '#74acdf' },
-    dificil: { name: 'Difícil', motto: 'A sable y coraje',     hp: 1.48, hpBig: 1.24, dmg: 1.4, spd: 1.08, gold: 0.9, color: '#cf2b2b' }
+    facil:   { name: 'Fácil',   motto: 'Paseo por la Alameda', hp: 0.9,  hpBig: 0.9,  dmg: 0.9, spd: 1.0,  gold: 1,   color: '#5cb24a', bossLoss: false },
+    normal:  { name: 'Normal',  motto: 'Como Dios manda',      hp: 1.46, hpBig: 1.22, dmg: 1.2, spd: 1.05, gold: 1,   color: '#74acdf', bossLoss: true },
+    dificil: { name: 'Difícil', motto: 'A sable y coraje',     hp: 1.48, hpBig: 1.24, dmg: 1.4, spd: 1.08, gold: 0.9, color: '#cf2b2b', bossLoss: true }
   };
   TD.DEFAULT_DIFF = 'normal';
   // Dificultad elegida en el guardado (siempre devuelve una válida)
@@ -50,6 +52,7 @@
     if (d.dmg !== 1) out.push(pc(d.dmg) + ' de daño');
     if (d.spd !== 1) out.push(pc(d.spd) + ' de velocidad');
     if (d.gold !== 1) out.push(pc(d.gold) + ' de botín');
+    if (d.bossLoss) out.push('si un jefe pasa, perdés');
     return 'Enemigos: ' + (out.length ? out.join(' · ') : 'sin cambios');
   };
 
@@ -153,6 +156,46 @@
     if (!d.names) return d.name;
     if (act != null && d.names[act]) return d.names[act];
     return d.names.slice(0, 2).join(' / ');
+  };
+
+  /* ---------- Desbloqueo de mejoras ----------
+   * Índice del nivel (desde 0) en que se habilita cada rango de mejora (I, II, III) de
+   * cada torre, en las dos ramas a la vez. La primera batalla se juega con las torres
+   * básicas y en Maipú, la última del Acto II, ya está todo el arsenal.             */
+  TD.UPGRADE_UNLOCK = {
+    granaderos: [1, 3, 6],   // Corrales de Miserere · Tucumán · Chacabuco
+    gauchos:    [1, 3, 7],   // Corrales de Miserere · Tucumán · Maipú
+    artilleria: [2, 4, 5],   // La Defensa · San Lorenzo · El Cruce de los Andes
+    tiradores:  [2, 4, 5]    // La Defensa · San Lorenzo · El Cruce de los Andes
+  };
+
+  // Rango de mejora más alto que se puede alcanzar con la torre `key` en el nivel `idx` (0 a 3).
+  TD.upgradeCap = function (key, idx) {
+    var u = TD.UPGRADE_UNLOCK[key], n = 0;
+    while (n < 3 && idx >= u[n]) n++;
+    return n;
+  };
+
+  // Mejoras que se estrenan en el nivel `idx`: [{ key, tier }] con tier de 1 a 3.
+  TD.newUpgrades = function (idx) {
+    var out = [];
+    TD.TOWER_KEYS.forEach(function (key) {
+      TD.UPGRADE_UNLOCK[key].forEach(function (at, n) { if (at === idx) out.push({ key: key, tier: n + 1 }); });
+    });
+    return out;
+  };
+
+  // Texto corto de esas mejoras, con los nombres de las torres del acto: «Patricios I · Gauchos I»
+  TD.newUpgradesText = function (idx) {
+    var act = TD.LEVELS[idx] ? TD.LEVELS[idx].act : null;
+    return TD.newUpgrades(idx).map(function (u) {
+      return TD.towerName(u.key, act) + ' ' + ['I', 'II', 'III'][u.tier - 1];
+    }).join(' · ');
+  };
+
+  // ¿Ya están todas las mejoras de todas las torres en el nivel `idx`?
+  TD.allUpgrades = function (idx) {
+    return TD.TOWER_KEYS.every(function (k) { return TD.upgradeCap(k, idx) >= 3; });
   };
 
   /* ---------- Enemigos ----------

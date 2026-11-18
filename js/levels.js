@@ -110,7 +110,7 @@
 
     /* =================== ACTO II =================== */
     {
-      act: 1, name: 'Tucumán', year: '1812', place: 'San Miguel de Tucumán', theme: 'campo',
+      act: 1, name: 'Tucumán', year: '1812', place: 'San Miguel de Tucumán', theme: 'campo', clima: 'langostas',
       gold: 320, lives: 20, hpMul: 1.35, mapPos: [432, 172],
       paths: [
         { pts: [[-40, 300], [200, 280], [380, 160], [600, 180], [700, 340], [560, 500], [760, 590], [1000, 520], [1080, 340], [1320, 300]] }
@@ -128,7 +128,7 @@
       ],
       stars: [{ t: 'lives', n: 15 }, { t: 'noSell' }, { t: 'early', n: 3 }],
       speaker: 'Baqueano',
-      talk: 'El enemigo baja confiado por el camino real. Los gauchos conocen cada mata de este campo: usalos.',
+      talk: 'El enemigo baja confiado por el camino real. Los gauchos conocen cada mata de este campo: usalos. Y si se levanta una manga de langostas, mejor: a ellos los frena.',
       info: [
         'El 24 de septiembre de 1812 el Ejército del Norte, al mando de Manuel Belgrano, enfrentó a los realistas en las afueras de San Miguel de Tucumán.',
         'Belgrano había recibido la orden de replegarse hasta Córdoba, pero decidió dar batalla con el apoyo de la población y de la caballería gaucha.',
@@ -136,7 +136,7 @@
       ]
     },
     {
-      act: 1, name: 'San Lorenzo', year: '1813', place: 'Orillas del Paraná', theme: 'costa',
+      act: 1, name: 'San Lorenzo', year: '1813', place: 'Orillas del Paraná', theme: 'costa', clima: 'amanecer',
       gold: 340, lives: 20, hpMul: 1.3, mapPos: [600, 322],
       paths: [
         { pts: [[40, 200], [250, 180], [480, 260], [700, 200], [950, 280], [1320, 270]] },
@@ -155,7 +155,7 @@
       ],
       stars: [{ t: 'lives', n: 14 }, { t: 'heroAlive' }, { t: 'noSell' }],
       speaker: 'Vigía del campanario',
-      talk: 'Desembarcaron en dos columnas. Que los granaderos los frenen en seco antes de que lleguen al convento.',
+      talk: 'Todavía no aclara y desembarcaron en dos columnas. Que los granaderos los frenen en seco antes de que lleguen al convento.',
       info: [
         'El 3 de febrero de 1813, junto al convento de San Carlos y a orillas del Paraná, una fuerza realista desembarcó para aprovisionarse.',
         'El Regimiento de Granaderos a Caballo, creado por José de San Martín, la cargó por sorpresa en dos columnas.',
@@ -163,7 +163,7 @@
       ]
     },
     {
-      act: 1, name: 'El Cruce de los Andes', year: '1817', place: 'Cordillera de los Andes', theme: 'montana',
+      act: 1, name: 'El Cruce de los Andes', year: '1817', place: 'Cordillera de los Andes', theme: 'montana', clima: 'niebla',
       gold: 360, lives: 20, hpMul: 1.65, mapPos: [268, 396],
       paths: [
         { pts: [[-40, 560], [240, 560], [420, 470], [240, 360], [400, 240], [640, 250], [760, 400], [640, 540], [860, 600], [1060, 520], [1040, 340], [1180, 200], [1320, 170]] }
@@ -182,7 +182,7 @@
       ],
       stars: [{ t: 'lives', n: 14 }, { t: 'maxTowers', n: 9 }, { t: 'early', n: 3 }],
       speaker: 'Arriero',
-      talk: 'El sendero es angosto y el aire, finito. Acá cada curva es una trampa: aprovechala.',
+      talk: 'El sendero es angosto y el aire, finito. Y ojo: con cada oleada baja más la niebla. Ubicá bien las torres, que alrededor de ellas siempre se ve.',
       info: [
         'Entre enero y febrero de 1817 el Ejército de los Andes, organizado en Cuyo, cruzó la cordillera hacia Chile.',
         'Unos 5.000 hombres, con mulas, caballos y artillería, avanzaron por varios pasos —los principales, Los Patos y Uspallata— a más de 4.000 metros de altura.',
