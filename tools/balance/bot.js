@@ -25,11 +25,12 @@
     };
   }
 
-  // cobertura de un solar: largo de camino dentro del alcance r
-  function coverage(g, s, r, naval) {
+  // cobertura de un solar: largo de camino dentro del alcance r (only: solo ese camino)
+  function coverage(g, s, r, naval, only) {
     var c = 0, p, d, pt = {};
     for (p = 0; p < g.paths.length; p++) {
       if (!!g.paths[p].naval !== !!naval) continue;
+      if (only != null && p !== only) continue;
       for (d = 0; d < g.paths[p].length; d += 10) {
         g.paths[p].at(d, pt);
         if (pt.x < 0 || pt.x > TD.W) continue;
@@ -37,6 +38,24 @@
       }
     }
     return c;
+  }
+
+  // Carriles separados (Resistencia): alterna el mejor solar de cada camino
+  function rankLanes(g) {
+    var lists = g.paths.map(function (path, pi) {
+      var l = g.slots.map(function (s) { return { s: s, c: coverage(g, s, 170, false, pi) }; }).filter(function (o) { return o.c > 0; });
+      l.sort(function (a, b) { return b.c - a.c; });
+      return l.map(function (o) { return o.s; });
+    });
+    var out = [], used = [], k = 0, guard = 0;
+    while (out.length < g.slots.length && guard++ < 1000) {
+      var l = lists[k % lists.length], j;
+      for (j = 0; j < l.length; j++) if (used.indexOf(l[j]) < 0) { out.push(l[j]); used.push(l[j]); break; }
+      k++;
+      if (lists.every(function (ll) { return ll.every(function (s) { return used.indexOf(s) >= 0; }); })) break;
+    }
+    g.slots.forEach(function (s) { if (used.indexOf(s) < 0) out.push(s); });
+    return { land: out, naval: [] };
   }
 
   function rankSlots(g) {
@@ -65,10 +84,10 @@
     var oldDiffs = {};
     if (cfg.diffs) for (k in cfg.diffs) { oldDiffs[k] = TD.DIFFS[k]; TD.DIFFS[k] = Object.assign({}, TD.DIFFS[k], cfg.diffs[k]); }
     TD.Save.data.diff = cfg.diff;
-    var oldLvl = {}, LV = TD.LEVELS[cfg.level];
+    var oldLvl = {}, LV = TD.levelDef(cfg.level);
     if (cfg.lvl) for (k in cfg.lvl) { oldLvl[k] = LV[k]; LV[k] = cfg.lvl[k]; }
     var gn = cfg.genome, g = new TD.Game(cfg.level, gn.hero || 'sanmartin');
-    var ranks = rankSlots(g), h = g.hero, dt = 1 / 40, pi = 0, tick = 0, i, tw, guard = 0;
+    var ranks = gn.lanes ? rankLanes(g) : rankSlots(g), h = g.hero, dt = 1 / 40, pi = 0, tick = 0, i, tw, guard = 0;
     var total = 0;
     g.lvl.waves.forEach(function (w) { w.groups.forEach(function (gr) { total += gr.n; }); });
 
@@ -153,7 +172,7 @@
 
     doPlan();
     g.callWave(false);
-    var maxT = 60 * 40, log = [], lastW = 0;
+    var maxT = cfg.maxT || 60 * 40, log = [], lastW = 0;
     while (g.state === 'running' && g.time < maxT) {
       g.step(dt);
       tick++;
@@ -166,7 +185,7 @@
       if (++guard > 400000) break;
     }
     var res = {
-      win: g.state === 'won', lives: g.lives, kills: g.stats.kills, total: total, wave: g.waveIdx, waves: g.lvl.waves.length,
+      win: g.state === 'won', lives: g.lives, cleared: g.cleared, kills: g.stats.kills, total: total, wave: g.waveIdx, waves: g.lvl.waves.length,
       time: Math.round(g.time), gold: g.gold, towers: g.towers.length, heroDeaths: g.stats.heroDeaths, planDone: pi, early: g.stats.early,
       leaked: g.stats.leaked, navalLeaked: g.stats.navalLeaked, tw: cfg.log ? g.towers.map(function (t) { return t.key.slice(0, 3) + (t.branch < 0 ? '' : t.branch) + t.level + '@' + t.x + ',' + t.y; }) : undefined, log: cfg.log ? log : undefined,
       stars: g.result && g.result.win ? g.result.stars : 0, slots: g.slots.length
