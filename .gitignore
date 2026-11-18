@@ -3,9 +3,6 @@
 # Entorno: Fedora + VS Code
 # ============================================
 
-*.png 
-*.jpeg
-
 # ---------- Sistema operativo (Fedora / Linux) ----------
 *~
 .fuse_hidden*
