@@ -587,6 +587,7 @@
     this.release();
     this.reviveT = 10;
     this.g.stats.heroDeaths++;
+    TD.Logros.onHeroFall();
     J.fall(this.g, this, { dur: 1.8, keepHat: true });
     this.g.kick(0.25);
     this.g.setBanner(this.def.name + ' cayó: vuelve en unos segundos (cuesta ' + this.reviveCost() + ' de oro).');
@@ -674,7 +675,7 @@
       g.addText(x, y - 60, '¡Guerra gaucha!', '#ffffff', 16);
     }
     this.abCd = this.abilityCd();
-    TD.Logros.bump('abil');
+    TD.Logros.ability(this.g);
     TD.Audio.play('ability');
     return true;
   };

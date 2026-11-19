@@ -1,5 +1,5 @@
 /* ============================================================
- * logros.js — condecoraciones (logros): 45 medallas en tres metales
+ * logros.js — condecoraciones (logros): medallas en tres metales
  * (bronce = fáciles, plata = normales, oro = difíciles).
  * Lleva los contadores acumulados entre batallas, decide cuándo se
  * gana cada medalla, encola el aviso en pantalla y sabe dibujarlas.
@@ -14,6 +14,10 @@
   TD.Logros = L;
 
   // hi / mid / lo: brillo, cuerpo y sombra del metal
+  L.GOLD_HELD = 2000;     // «Cofre del virrey»: oro en mano en una batalla
+  L.HERO_BATTLE = 70;     // «Lanza en ristre»: bajas del héroe en una batalla
+  L.ABIL_BATTLE = 15;     // «Descarga cerrada»: habilidades en una batalla
+
   L.TIERS = [
     { name: 'Bronce', of: 'de bronce', kind: 'fáciles',   hi: '#f0c08a', mid: '#b87a3d', lo: '#74461b' },
     { name: 'Plata',  of: 'de plata',  kind: 'normales',  hi: '#f8fafc', mid: '#bfc5cd', lo: '#6f7682' },
@@ -25,6 +29,8 @@
     var v = TD.Save.data.stat[k];
     return typeof v === 'number' && isFinite(v) && v > 0 ? v : 0;
   }
+  // 1.234 (para los contadores grandes)
+  function fmt(n) { return String(Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
   function bits(v) { var n = 0; v = v | 0; while (v) { n += v & 1; v >>>= 1; } return n; }
   function lvlIdx(name) {
     for (var i = 0; i < TD.LEVELS.length; i++) if (TD.LEVELS[i].name === name) return i;
@@ -49,6 +55,8 @@
     for (i = 0; i < TD.LEVELS.length; i++) m = Math.max(m, TD.Save.data.stars[String(i)] | 0);
     return m;
   }
+  // Oleadas superadas en la Resistencia (el récord)
+  function endlessBest() { return TD.Endless ? TD.Endless.best() : 0; }
   function hard3() {
     var n = 0, i;
     for (i = 0; i < TD.LEVELS.length; i++) if (TD.Save.starsAt(i, 2) >= 3) n++;
@@ -83,6 +91,13 @@
   def(0, 'expl75', 'bolas', 'Boleados', 'Derrotá 75 exploradores.', { stat: 'expl', n: 75 });
   def(0, 'heroe3', 'galon', 'Jinetas de cabo', 'Llevá a tu héroe al nivel 3 en una batalla.', { prog: function () { return [Math.min(3, Math.max(1, stat('heroLvl'))), 3]; } });
   def(0, 'tres', 'laurel', 'Parte de victoria', 'Ganá una batalla con sus 3 estrellas.', { prog: function () { return [bestStars(), 3]; } });
+  def(0, 'res10', 'torre', 'Aguantadero', 'Superá 10 oleadas en la Resistencia.', { prog: function () { return [endlessBest(), 10]; } });
+  def(0, 'armas', 'bandera', 'Armas combinadas', 'Ganá una batalla habiendo construido los 4 tipos de torre.');
+  def(0, 'pelo', 'corazon', 'Por un pelo', 'Ganá una batalla con 3 vidas o menos.');
+  def(0, 'descarga', 'granada', 'Descarga cerrada', 'Usá ' + L.ABIL_BATTLE + ' habilidades en una sola batalla.');
+  def(0, 'manoamano', 'lanza', 'Mano a mano', 'Que tu héroe dé el golpe final a un jefe.', { stat: 'bossHero', n: 1 });
+  def(0, 'chalan', 'moneda', 'Chalán', 'Vendé 20 torres. Y a buen precio.', { stat: 'sold', n: 20 });
+  def(0, 'caidas7', 'cruz', 'Siete vidas', 'Que tu héroe caiga en combate 7 veces (siempre se levanta).', { stat: 'falls', n: 7 });
 
   // ----- Plata: normales -----
   def(1, 'bajas1000', 'sables', 'Mil y una bajas', 'Derrotá 1.000 enemigos.', { stat: 'kills', n: 1000 });
@@ -103,6 +118,17 @@
   def(1, 'heroe6', 'galon', 'Foja brillante', 'Llevá a tu héroe al nivel 6, el máximo.', { prog: function () { return [Math.max(1, stat('heroLvl')), 6]; } });
   def(1, 'redoblado', 'corneta', 'A paso redoblado', 'Ganá una batalla adelantando todas sus oleadas.');
   def(1, 'cadenas', 'cadena', 'Las cadenas aguantan', 'Ganá «Las cadenas del Paraná» sin que pase ningún barco.');
+  def(1, 'res20', 'escudo', 'Ni un paso atrás', 'Superá 20 oleadas en la Resistencia.', { prog: function () { return [endlessBest(), 20]; } });
+  def(1, 'res25', 'laurel', 'Bodas de plata', 'Superá 25 oleadas en la Resistencia.', { prog: function () { return [endlessBest(), 25]; } });
+  def(1, 'solo_granaderos', 'granada', 'A pura bayoneta', 'Ganá una batalla en Normal o Difícil construyendo solo cuarteles (Patricios / Granaderos).');
+  def(1, 'solo_gauchos', 'bolas', 'Montonera pura', 'Ganá una batalla en Normal o Difícil construyendo solo Gauchos.');
+  def(1, 'solo_artilleria', 'canon', 'Los cañones hablan', 'Ganá una batalla en Normal o Difícil construyendo solo Artillería criolla.');
+  def(1, 'solo_tiradores', 'fusil', 'Fusil al hombro', 'Ganá una batalla en Normal o Difícil construyendo solo Tiradores.');
+  def(1, 'racha5', 'mate', 'Ronda de mate', 'Ganá 5 batallas seguidas en Normal o Difícil sin perder ninguna.', { stat: 'streakBest', n: 5 });
+  def(1, 'caudales', 'moneda', 'Cofre del virrey', 'Tené ' + fmt(L.GOLD_HELD) + ' de oro en mano en una sola batalla.');
+  def(1, 'lanza', 'lanza', 'Lanza en ristre', 'Que tu héroe derrote a ' + L.HERO_BATTLE + ' enemigos en una sola batalla.');
+  def(1, 'espias20', 'bicornio', 'Contraespionaje', 'Derrotá 20 infiltrados.', { stat: 'spy', n: 20 });
+  def(1, 'obra250', 'martillo', 'Maestro de obras', 'Construí 250 torres.', { stat: 'built', n: 250 });
 
   // ----- Oro: difíciles -----
   def(2, 'dificil12', 'sables', 'A sable y coraje', 'Ganá las 12 batallas en difícil.', { prog: function () { return [won(2), N()]; } });
@@ -118,6 +144,11 @@
     prog: function () { var i = lvlIdx('El Cruce de los Andes'); return [i < 0 ? 0 : TD.Save.starsAt(i, 2), 3]; }
   });
   def(2, 'deguello', 'corneta', 'Toque a degüello', 'Ganá una batalla en difícil adelantando todas sus oleadas.');
+  def(2, 'res30', 'bandera', 'Hasta que el cuerpo aguante', 'Superá 30 oleadas en la Resistencia.', { prog: function () { return [endlessBest(), 30]; } });
+  def(2, 'res40', 'sol', 'Más largo que un cabildo abierto', 'Superá 40 oleadas en la Resistencia.', { prog: function () { return [endlessBest(), 40]; } });
+  def(2, 'res50', 'laurel', 'Leyenda del fortín', 'Superá 50 oleadas en la Resistencia. Muy pocos llegan.', { prog: function () { return [endlessBest(), 50]; } });
+  def(2, 'monocultivo', 'estrella', 'Monocultivo', 'Ganá una batalla del Acto II o III en Normal o Difícil construyendo un solo tipo de torre.');
+  def(2, 'racha10', 'mate', 'Ni un tropezón', 'Ganá 10 batallas seguidas en Normal o Difícil sin perder ninguna.', { stat: 'streakBest', n: 10 });
   // siempre la última: cuenta a todas las demás
   def(2, 'padre', 'estrella', 'Padre de la Patria', 'Conseguí todas las demás condecoraciones.', {
     prog: function () { return [L.total().got - (L.has('padre') ? 1 : 0), L.list.length - 1]; }
@@ -148,8 +179,7 @@
   };
   L.total = function () { return L.count(null); };
 
-  // 1.234 (para los contadores grandes)
-  L.fmt = function (n) { return String(Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); };
+  L.fmt = fmt;
 
   /* ---------------- otorgar ---------------- */
   L.grant = function (id, silent) {
@@ -208,7 +238,7 @@
 
   /* ---------------- sucesos de la batalla ---------------- */
   L.onKill = function (e, byHero) {
-    var d = e.def;
+    var d = e.def, st = e.g.stats;
     L.bump('kills');
     L.bump('gold', TD.diffGold(e.g.dm, d));
     if (d.boss) L.bump('bosses');
@@ -217,7 +247,33 @@
     if (d.elite) L.bump('elite');
     if (d.trait === 'Blindado') L.bump('heavy');
     if (e.type === 'explorador') L.bump('expl');
-    if (byHero) L.bump('heroKills');
+    if (e.type === 'espia') L.bump('spy');
+    if (byHero) {
+      L.bump('heroKills');
+      if (d.boss) L.bump('bossHero');
+      st.heroKills = (st.heroKills | 0) + 1;
+      if (st.heroKills >= L.HERO_BATTLE) L.grant('lanza');
+    }
+  };
+
+  // Una habilidad usada (de torre o de héroe): cuenta en el total y en la batalla
+  L.ability = function (g) {
+    L.bump('abil');
+    if (g && g.stats) {
+      g.stats.abil = (g.stats.abil | 0) + 1;
+      if (g.stats.abil >= L.ABIL_BATTLE) L.grant('descarga');
+    }
+  };
+  // Cada vez que el oro en mano marca un récord de la batalla
+  L.onGold = function (n) { if (n >= L.GOLD_HELD) L.grant('caudales'); };
+  L.onSell = function () { L.bump('sold'); };
+  L.onHeroFall = function () { L.bump('falls'); };
+
+  // Derrota en la campaña: corta la racha (solo si se jugaba en Normal o Difícil)
+  // También revisa el resto: una medalla ganada en plena batalla perdida cuenta para «Padre de la Patria».
+  L.onLose = function (g) {
+    if (!g.endless && g.minDiff >= 1 && stat('streak') > 0) { TD.Save.data.stat.streak = 0; L.dirty = true; }
+    L.check();
   };
 
   // Se llama al ganar, con estrellas y medallas de dificultad ya anotadas en el guardado
@@ -228,6 +284,16 @@
     if (st.early >= g.lvl.waves.length - 1) { L.grant('redoblado'); if (hard) L.grant('deguello'); }
     if (hard && st.heroDeaths === 0 && g.idx === lvlIdx('San Lorenzo')) L.grant('cabral');
     if (st.navalLeaked === 0 && g.idx === lvlIdx('Las cadenas del Paraná')) L.grant('cadenas');
+    // con qué torres se ganó
+    var tipos = Object.keys(st.types || {});
+    if (tipos.length === TD.TOWER_KEYS.length) L.grant('armas');
+    if (tipos.length === 1 && g.minDiff >= 1) {
+      L.grant('solo_' + tipos[0]);
+      if (g.lvl.act >= 1) L.grant('monocultivo');
+    }
+    if (g.lives >= 1 && g.lives <= 3) L.grant('pelo');
+    // racha de victorias en Normal o Difícil
+    if (g.minDiff >= 1) { L.bump('streak'); L.max('streakBest', stat('streak')); }
     L.check();
     L.flush();
   };
@@ -415,6 +481,39 @@
         ctx.beginPath(); ctx.arc(-7.5, -6, 3.2, 0, TAU); ctx.fill();
         ctx.beginPath(); ctx.arc(8, -3.5, 3.2, 0, TAU); ctx.fill();
         ctx.beginPath(); ctx.arc(-1, 8.5, 2.8, 0, TAU); ctx.fill();
+        break;
+      case 'lanza':
+        ctx.save(); ctx.rotate(-Math.PI / 4);
+        ctx.lineCap = 'butt'; ctx.lineWidth = 2.1;
+        ctx.beginPath(); ctx.moveTo(-12.5, 0); ctx.lineTo(3, 0); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(1.5, 0); ctx.quadraticCurveTo(4.5, -3.8, 12, 0); ctx.quadraticCurveTo(4.5, 3.8, 1.5, 0); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = hi; ctx.strokeStyle = c; ctx.lineWidth = 1.1;
+        ctx.beginPath(); ctx.moveTo(-1, 0.8); ctx.lineTo(-10.5, 3.6); ctx.lineTo(-1, 6.4); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.restore();
+        break;
+      case 'mate':
+        ctx.beginPath();
+        ctx.moveTo(-7, -1.5); ctx.bezierCurveTo(-9, 5.5, -4.5, 10.5, 0, 10.5); ctx.bezierCurveTo(4.5, 10.5, 9, 5.5, 7, -1.5);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = hi; ctx.beginPath(); ctx.ellipse(0, -1.5, 7, 2.6, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(0, -1.5, 5.2, 1.6, 0, 0, TAU); ctx.fill();
+        ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(1, -1.5); ctx.lineTo(7.5, -10.5); ctx.stroke();
+        ctx.beginPath(); ctx.arc(7.9, -11, 1.6, 0, TAU); ctx.fill();
+        break;
+      case 'cruz':
+        ctx.fillRect(-2.2, -11, 4.4, 17); ctx.fillRect(-6.6, -6.6, 13.2, 4.2);
+        ctx.beginPath(); ctx.ellipse(0, 9, 9.5, 2.8, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = hi; ctx.fillRect(-0.7, -9, 1.4, 12);
+        break;
+      case 'fusil':
+        ctx.save(); ctx.rotate(-0.6);
+        ctx.lineCap = 'butt'; ctx.lineWidth = 2.3;
+        ctx.beginPath(); ctx.moveTo(-3, -1.6); ctx.lineTo(9.5, -1.6); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-12, 0.2); ctx.lineTo(-3, -3); ctx.lineTo(-3, 1.2); ctx.lineTo(-9.5, 4.8); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(9.5, -2.8); ctx.lineTo(14, -1.6); ctx.lineTo(9.5, -0.6); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = hi; ctx.beginPath(); ctx.arc(-2, -0.4, 1.2, 0, TAU); ctx.fill();
+        ctx.lineWidth = 1.2; ctx.strokeStyle = c; ctx.beginPath(); ctx.arc(-1.2, 1.4, 2.4, 0.1 * Math.PI, 0.9 * Math.PI); ctx.stroke();
+        ctx.restore();
         break;
     }
   }
