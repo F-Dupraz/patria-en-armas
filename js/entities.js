@@ -629,6 +629,7 @@
       this.reviveT -= dt;
       if (this.reviveT <= 0 && g.gold >= this.reviveCost()) {
         g.gold -= this.reviveCost();
+        g.stats.spent += this.reviveCost();
         this.revive(this.hx, this.hy);
         g.addFx({ k: 'ring', x: this.x, y: this.y, r: 50, color: D.CELESTE, dur: 0.6 });
         this.hitFlash = 0.08;

@@ -69,7 +69,7 @@
     this.state = 'prep';            // prep | running | won | lost
     this.waveIdx = 0; this.nextTimer = 0; this.spawners = []; this.waveLeft = [];
     this.stats = { sold: 0, leaked: 0, navalLeaked: 0, heroDeaths: 0, early: 0, built: 0, kills: 0, maxTowers: 0,
-      types: {}, abil: 0, heroKills: 0, peakGold: 0 };      // tipos de torre construidos, habilidades, bajas del héroe y oro máximo en mano (condecoraciones)
+      types: {}, abil: 0, heroKills: 0, peakGold: 0, spent: 0 };      // tipos de torre construidos, habilidades, bajas del héroe, oro máximo en mano y oro gastado (condecoraciones)
     this.sel = null; this.mode = null; this.armed = null;
     this.banner = null; this.endT = 0; this.result = null;
     this.mx = -999; this.my = -999;
@@ -386,6 +386,7 @@
       return false;
     }
     this.gold -= def.cost;
+    this.stats.spent += def.cost;
     var tw = new TD.Tower(this, slot, key);
     tw.popT = 0.4;
     slot.tower = tw;
