@@ -17,6 +17,8 @@
   L.GOLD_HELD = 2000;     // «Cofre del virrey»: oro en mano en una batalla
   L.HERO_BATTLE = 70;     // «Lanza en ristre»: bajas del héroe en una batalla
   L.ABIL_BATTLE = 15;     // «Descarga cerrada»: habilidades en una batalla
+  L.SPEND_SILVER = 2000;  // «Con lo justo»: tope de oro gastado en una victoria
+  L.SPEND_GOLD = 1200;    // «Cada peso cuenta»
 
   L.TIERS = [
     { name: 'Bronce', of: 'de bronce', kind: 'fáciles',   hi: '#f0c08a', mid: '#b87a3d', lo: '#74461b' },
@@ -127,6 +129,7 @@
   def(1, 'racha5', 'mate', 'Ronda de mate', 'Ganá 5 batallas seguidas en Normal o Difícil sin perder ninguna.', { stat: 'streakBest', n: 5 });
   def(1, 'caudales', 'moneda', 'Cofre del virrey', 'Tené ' + fmt(L.GOLD_HELD) + ' de oro en mano en una sola batalla.');
   def(1, 'lanza', 'lanza', 'Lanza en ristre', 'Que tu héroe derrote a ' + L.HERO_BATTLE + ' enemigos en una sola batalla.');
+  def(1, 'justo', 'moneda', 'Con lo justo', 'Ganá un nivel del Acto II o III en Normal o Difícil gastando ' + fmt(L.SPEND_SILVER) + ' de oro o menos en total.');
   def(1, 'espias20', 'bicornio', 'Contraespionaje', 'Derrotá 20 infiltrados.', { stat: 'spy', n: 20 });
   def(1, 'obra250', 'martillo', 'Maestro de obras', 'Construí 250 torres.', { stat: 'built', n: 250 });
 
@@ -148,6 +151,7 @@
   def(2, 'res40', 'sol', 'Más largo que un cabildo abierto', 'Superá 40 oleadas en la Resistencia.', { prog: function () { return [endlessBest(), 40]; } });
   def(2, 'res50', 'laurel', 'Leyenda del fortín', 'Superá 50 oleadas en la Resistencia. Muy pocos llegan.', { prog: function () { return [endlessBest(), 50]; } });
   def(2, 'monocultivo', 'estrella', 'Monocultivo', 'Ganá una batalla del Acto II o III en Normal o Difícil construyendo un solo tipo de torre.');
+  def(2, 'peso', 'martillo', 'Cada peso cuenta', 'Ganá un nivel del Acto II o III en Normal o Difícil gastando ' + fmt(L.SPEND_GOLD) + ' de oro o menos en total.');
   def(2, 'racha10', 'mate', 'Ni un tropezón', 'Ganá 10 batallas seguidas en Normal o Difícil sin perder ninguna.', { stat: 'streakBest', n: 10 });
   // siempre la última: cuenta a todas las demás
   def(2, 'padre', 'estrella', 'Padre de la Patria', 'Conseguí todas las demás condecoraciones.', {
@@ -292,6 +296,11 @@
       if (g.lvl.act >= 1) L.grant('monocultivo');
     }
     if (g.lives >= 1 && g.lives <= 3) L.grant('pelo');
+    // austeridad: oro gastado en toda la batalla (vender no lo devuelve a la cuenta)
+    if (g.minDiff >= 1 && g.lvl.act >= 1) {
+      if (st.spent <= L.SPEND_SILVER) L.grant('justo');
+      if (st.spent <= L.SPEND_GOLD) L.grant('peso');
+    }
     // racha de victorias en Normal o Difícil
     if (g.minDiff >= 1) { L.bump('streak'); L.max('streakBest', stat('streak')); }
     L.check();

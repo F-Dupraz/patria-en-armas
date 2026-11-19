@@ -89,6 +89,7 @@
     if (g.gold < cost) { TD.Audio.play('deny'); return false; }
     if (this.branch < 0) this.branch = b;
     g.gold -= cost;
+    g.stats.spent += cost;
     this.invested += cost;
     this.level++;
     this.st = TD.merge(this.def.base, this.def.branches[this.branch].levels[this.level - 1]);
