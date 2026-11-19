@@ -445,7 +445,7 @@
       TD.Audio.play('horn');
     }
     this.abCd = this.def.ability.cd;
-    TD.Logros.bump('abil');
+    TD.Logros.ability(this.g);
     return true;
   };
 

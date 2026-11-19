@@ -6,7 +6,7 @@
   var TD = window.TD;
   var noop = function () {};
   TD.Audio.play = noop;
-  ['bump', 'onKill', 'onWin', 'flush', 'max', 'bit'].forEach(function (k) { TD.Logros[k] = noop; });
+  ['bump', 'onKill', 'onWin', 'onLose', 'onGold', 'onSell', 'onHeroFall', 'ability', 'grant', 'check', 'flush', 'max', 'bit'].forEach(function (k) { TD.Logros[k] = noop; });
   TD.Save.save = noop;
   TD.Draw.background = function () { return null; };
   // nada visual: solo la simulación

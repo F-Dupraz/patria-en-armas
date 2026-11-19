@@ -68,7 +68,8 @@
     this.time = 0; this.speed = 1; this.paused = false;
     this.state = 'prep';            // prep | running | won | lost
     this.waveIdx = 0; this.nextTimer = 0; this.spawners = []; this.waveLeft = [];
-    this.stats = { sold: 0, leaked: 0, navalLeaked: 0, heroDeaths: 0, early: 0, built: 0, kills: 0, maxTowers: 0 };
+    this.stats = { sold: 0, leaked: 0, navalLeaked: 0, heroDeaths: 0, early: 0, built: 0, kills: 0, maxTowers: 0,
+      types: {}, abil: 0, heroKills: 0, peakGold: 0 };      // tipos de torre construidos, habilidades, bajas del héroe y oro máximo en mano (condecoraciones)
     this.sel = null; this.mode = null; this.armed = null;
     this.banner = null; this.endT = 0; this.result = null;
     this.mx = -999; this.my = -999;
@@ -258,6 +259,7 @@
     if (this.cleared > (en.best | 0)) {
       en.best = this.cleared; en.kills = this.stats.kills; en.hero = this.hero.key;
       S.save();
+      TD.Logros.check();                      // las medallas de la Resistencia salen en el momento
       if (!this.newRecord && this.record > 0) {
         this.setBanner('¡Nuevo récord personal! ' + this.cleared + ' oleadas');
         TD.Audio.play('star', 2);
@@ -389,6 +391,7 @@
     slot.tower = tw;
     this.towers.push(tw);
     this.stats.built++;
+    this.stats.types[key] = 1;
     TD.Logros.bump('built');
     if (this.towers.length > this.stats.maxTowers) this.stats.maxTowers = this.towers.length;
     this.addFx({ k: 'dust', x: slot.x, y: slot.y + 4, r: 34, dur: 0.6, seed: slot.x });
@@ -405,6 +408,7 @@
     this.gold += v;
     J.coin(this, tw.x, tw.y - 40, v);
     this.stats.sold++;
+    TD.Logros.onSell();
     tw.dismiss();
     this.towers.splice(i, 1);
     tw.slot.tower = null;
@@ -433,6 +437,7 @@
   Game.prototype.step = function (dt) {
     var i, s, f, t, j;
     this.time += dt;
+    if (this.gold > this.stats.peakGold) { this.stats.peakGold = this.gold; TD.Logros.onGold(this.gold); }
     if (this.lifeFlash > 0) this.lifeFlash -= dt;
     if (this.hurtT > 0) this.hurtT -= dt;
     J.step(this, dt);
@@ -526,6 +531,7 @@
         this.result.best = TD.Endless.best();
         this.result.record = this.newRecord;
       }
+      TD.Logros.onLose(this);
       TD.Logros.flush();
       TD.Audio.play('lose');
       return;

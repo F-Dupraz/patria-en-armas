@@ -19,7 +19,7 @@
     game: null, modal: null, modalT: 0, starSnd: 0, settings: false, drag: null,
     mapSel: 0, encyTab: 0, encySel: 0, confirmReset: 0,
     tut: null, heroBack: 'menu',
-    logTab: 0, logBack: 'menu', logNew: {},
+    logTab: 0, logBack: 'menu', logNew: {}, logFocus: null,
     heroSel: -1, logPage: 0, iosHelp: false,     // solo para el diseño compacto / instalación
     buildOpen: false, infoKey: '', infoT: 0
   };
@@ -108,6 +108,8 @@
       var L = TD.Logros, n;
       for (n = 2; n >= 0; n--) if (L.count(n).fresh) UI.logTab = n;
       UI.logNew = L.markSeen();
+      UI.logFocus = null;                       // la primera medalla nueva del metal: el libro abre en su página
+      for (n = 0; n < L.list.length; n++) if (L.list[n].tier === UI.logTab && UI.logNew[L.list[n].id]) { UI.logFocus = L.list[n].id; break; }
       goNow('logros');
     });
   };
@@ -817,15 +819,25 @@
     }
   }
 
+  // Página del libro: la pedida, o (al abrirlo) la de la medalla nueva. Devuelve { pages, pg }.
+  function logPaging(items, per) {
+    var pages = Math.max(1, Math.ceil(items.length / per)), i;
+    if (UI.logFocus) {
+      for (i = 0; i < items.length; i++) if (items[i].id === UI.logFocus) { UI.logPage = (i / per) | 0; break; }
+      UI.logFocus = null;
+    }
+    return { pages: pages, pg: UI.logPage = TD.clamp(UI.logPage, 0, pages - 1) };
+  }
+
   function drawLogros(ctx) {
-    var L = TD.Logros, tab = UI.logTab, T = L.TIERS[tab], all = L.total(), n, items = [];
+    var L = TD.Logros, tab = UI.logTab, T = L.TIERS[tab], all = L.total(), n, items = [], per = 12;
     D.parchment(ctx);
     UI.button(ctx, 40, 34, 120, 38, '← Volver', function () { UI.go(UI.logBack); }, { size: 16 });
     D.text(ctx, 'Condecoraciones', 180, 66, 34, D.INK, 'left', true);
     // una pestaña por metal: bronce (fáciles), plata (normales) y oro (difíciles)
     L.TIERS.forEach(function (tr, k) {
       var c = L.count(k), x = 632 + k * 206;
-      UI.button(ctx, x, 34, 196, 38, '', function () { UI.logTab = k; }, { active: tab === k });
+      UI.button(ctx, x, 34, 196, 38, '', function () { UI.logTab = k; UI.logPage = 0; }, { active: tab === k });
       L.medal(ctx, x + 22, 59, 0.36, k, 'granada', true);
       fit(ctx, tr.name + ' · ' + c.got + ' / ' + c.total, x + 42, 59, 146, 17, D.INK, 'left', true);
       if (c.fresh) badge(ctx, x + 192, 38, c.fresh);
@@ -835,8 +847,14 @@
     D.text(ctx, 'Medallas ' + T.of + ': las ' + T.kind, 60, 120, 16, D.INK, 'left', true);
     D.text(ctx, 'Foja de servicios: ' + all.got + ' de ' + all.total + ' condecoraciones', 1220, 120, 14, D.INK2, 'right', false, true);
     for (n = 0; n < L.list.length; n++) if (L.list[n].tier === tab) items.push(L.list[n]);
-    var rows = Math.ceil(items.length / 3), gap = 8, y0 = 132, ch = Math.min(124, (546 - (rows - 1) * gap) / rows), cw = 382;
-    items.forEach(function (a, i) {
+    var pp = logPaging(items, per), pg = pp.pg;
+    if (pp.pages > 1) {
+      UI.button(ctx, 560, 98, 44, 30, '‹', pg > 0 ? function () { UI.logPage = pg - 1; } : null, { size: 22, disabled: pg <= 0 });
+      D.text(ctx, 'Página ' + (pg + 1) + ' de ' + pp.pages, 668, 120, 15, D.INK, 'center', true);
+      UI.button(ctx, 732, 98, 44, 30, '›', pg < pp.pages - 1 ? function () { UI.logPage = pg + 1; } : null, { size: 22, disabled: pg >= pp.pages - 1 });
+    }
+    var rows = Math.ceil(Math.min(per, items.length) / 3), gap = 8, y0 = 132, ch = Math.min(124, (546 - (rows - 1) * gap) / rows), cw = 382;
+    items.slice(pg * per, pg * per + per).forEach(function (a, i) {
       logroCard(ctx, a, 56 + (i % 3) * (cw + 11), y0 + ((i / 3) | 0) * (ch + gap), cw, ch);
     });
   }
@@ -2043,7 +2061,7 @@
     });
 
     for (n = 0; n < L.list.length; n++) if (L.list[n].tier === tab) items.push(L.list[n]);
-    var pages = Math.max(1, Math.ceil(items.length / per)), pg = UI.logPage = TD.clamp(UI.logPage, 0, pages - 1);
+    var pp = logPaging(items, per), pages = pp.pages, pg = pp.pg;
     D.panel(ctx, 10, 52, W - 20, 420);
     fit(ctx, 'Medallas ' + T.of + ': las ' + T.kind + ' · ' + all.got + ' de ' + all.total + ' en total', 26, 80, W - 250, 15, D.INK, 'left', true);
     // paginador
